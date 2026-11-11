@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+
+# 数据由脚本生成或自己准备，不进仓库（见 README）
+data/*
+!data/.gitkeep
+
+.DS_Store
+Thumbs.db

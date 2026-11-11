@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>问金寻银 实时投研</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="nebula.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="overlay"></canvas>
+<main id="hud">
+  <header class="top">
+    <div class="brand"><b>问金寻银</b><span>实时投研</span></div>
+    <div class="mode" id="mode"><i></i><span id="modeText">启动中</span></div>
+    <button id="basketBtn" class="ghost basket" aria-label="篮子" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 9.5h16l-1.7 9.6a1.6 1.6 0 0 1-1.6 1.3H7.3a1.6 1.6 0 0 1-1.6-1.3z"/><path d="M8.6 9.5 12 4l3.4 5.5"/></svg>
+      <b id="basketCount"></b>
+    </button>
+    <button id="acctBtn" class="ghost" aria-label="模拟账户">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4.5 7.5h13.2a1.8 1.8 0 0 1 1.8 1.8v8.4a1.8 1.8 0 0 1-1.8 1.8H6.3a1.8 1.8 0 0 1-1.8-1.8z"/><path d="M4.5 7.8 15.6 4.6a1 1 0 0 1 1.3 1v1.9"/><path d="M15.2 13.5h4.3"/></svg>
+    </button>
+    <button id="searchBtn" class="ghost" aria-label="查找股票">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    </button>
+  </header>
+  <section class="left">
+    <nav class="markets" id="markets" aria-label="市场">
+      <button data-view="ALL" class="on">全部</button><button data-view="CN">A股</button><button data-view="HK">港股</button><button data-view="US">美股</button>
+    </nav>
+    <div class="indices" id="indices"></div>
+    <div class="hero">
+      <div class="acct" id="acctBox" role="button" tabindex="0" aria-label="打开模拟账户：持仓、买卖记录、委托">
+        <label id="acctLabel">模拟账户</label>
+        <div class="big" id="acctBig">—</div>
+        <div class="sub" id="acctSub"></div>
+      </div>
+      <div class="mkt" id="mkt"></div>
+    </div>
+  </section>
+  <section id="stage" aria-label="星云"></section>
+  <section class="bottom">
+    <div class="replay" id="replay">
+      <button id="playBtn" class="ghost small" aria-label="暂停">❚❚</button>
+      <div class="tape"><div id="tapeFill"></div></div>
+      <span id="replayText"></span>
+      <button id="liveBtn" class="chip">看实时</button>
+    </div>
+    <div class="feed"><b id="feedTag">行情</b><div class="track-wrap"><div class="track" id="track"></div></div></div>
+    <nav class="pipeline" id="pipeline"></nav>
+  </section>
+  <section class="side" id="side" aria-label="更多数据"></section>
+  <section class="right">
+    <div class="panels">
+      <div class="panel" data-panel="breadth"><h4>涨跌分布</h4><canvas id="pBreadth"></canvas></div>
+      <div class="panel" data-panel="well"><h4>多空势能</h4><canvas id="pWell"></canvas></div>
+      <div class="panel" data-panel="funnel"><h4 id="funnelTitle">波动漏斗</h4><canvas id="pFunnel"></canvas></div>
+    </div>
+    <p class="note">数据来自公开网络，可能延迟或有误，仅供研究。</p>
+  </section>
+</main>
+<aside id="sheet" class="sheet" aria-hidden="true">
+  <div class="sheet-grip"></div>
+  <header class="sheet-head">
+    <button id="sheetBack" class="ghost" aria-label="返回">‹</button>
+    <div><h3 id="sheetTitle"></h3><p id="sheetSub"></p></div>
+    <button id="sheetClose" class="ghost" aria-label="关闭">×</button>
+  </header>
+  <div class="sheet-body" id="sheetBody"></div>
+  <canvas id="fanCanvas"></canvas>
+</aside>
+<script src="nebula-core.js"></script>
+<script src="nebula-sim.js"></script>
+<script type="module" src="nebula-app.js"></script>
+</body>
+</html>
