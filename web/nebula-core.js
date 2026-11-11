@@ -9,10 +9,11 @@
  * Full-quote field positions (verified against live data): 43 amplitude, 44 float market cap, 45 total market cap, 46 P/B.
  */
 (function (root, factory) {
-  const api = factory();
+  const i18n = typeof module === 'object' && module.exports ? require('./nebula-i18n.js') : root.NebulaI18n;
+  const api = factory(i18n);
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.NebulaCore = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (I18n) {
   const LINE = /v_([a-z]{2}[A-Za-z0-9.]+)="([^"]*)"/g;
   const SIMPLE = /v_s_([a-z]{2}[A-Za-z0-9.]+)="([^"]*)"/g;
   const SHANGHAI_MS = 8 * 3600 * 1000;
@@ -499,6 +500,13 @@
   function money(v) {
     if (v === null || v === undefined || !Number.isFinite(v)) return '—';
     const a = Math.abs(v);
+    if (I18n.lang === 'en') {   // 英文界面用 K / M / B / T
+      if (a >= 999.5e9) return (v / 1e12).toFixed(2) + 'T';
+      if (a >= 999.5e6) return (v / 1e9).toFixed(a >= 99.95e9 ? 0 : 1) + 'B';
+      if (a >= 999.5e3) return (v / 1e6).toFixed(a >= 99.95e6 ? 0 : 1) + 'M';
+      if (a >= 1e4) return (v / 1e3).toFixed(0) + 'K';
+      return v.toFixed(0);
+    }
     if (a >= 1e12) return (v / 1e12).toFixed(2) + ' 万亿';
     if (a >= 1e8) return (v / 1e8).toFixed(a >= 1e10 ? 0 : 1) + ' 亿';
     if (a >= 1e4) return (v / 1e4).toFixed(1) + ' 万';

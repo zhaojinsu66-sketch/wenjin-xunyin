@@ -4,9 +4,9 @@ English | [中文](README.md)
 
 A real-time market board for China A-shares, Hong Kong stocks and US stocks. More than 8,000 stocks are laid out as one 3D nebula: every stock is a dot, sized by its turnover (value traded) and coloured by its price change (red is up and green is down, following the Chinese market convention). Quotes come from public sources. Dots light up batch by batch as quotes arrive, and a stock with no data stays dark: nothing is filled in with made-up numbers.
 
-![Desktop screenshot of Wenjin Xunyin](docs/screenshot-desktop.jpg)
+![Desktop screenshot of Wenjin Xunyin](docs/screenshot-desktop.en.jpg)
 
-The interface is in Chinese.
+The interface is available in Chinese and English. Switch with the button at the top right (on phones, the link at the bottom of the page), or add `?lang=en` / `?lang=zh` to the address. Stock names are shown as the data source provides them, which is in Chinese.
 
 - **Nebula:** clustered by industry. Drag to rotate, scroll or pinch to zoom. Click a dot to see that stock's quote, five-level order book and daily candlestick chart.
 - **Markets:** switch between All, A-shares, Hong Kong and US. The main indices are at the top, and the outer ring shows the biggest gainers and losers.
@@ -55,7 +55,7 @@ Open <http://127.0.0.1:8765/> in a browser. To use another port: `python server.
 | `data/history.json` + `history.bin` | Recent daily price-change matrix, used for the after-close replay and factor IC (information coefficient) | No. Without it there is no replay |
 | `data/rules.json` | Signals and backtests computed from your own screening rules | No. Without it no signals are shown |
 
-The formats of the optional files are described in [docs/data-format.md](docs/data-format.md) (in Chinese). None of these files are included in the repository.
+The formats of the optional files are described in [docs/data-format.en.md](docs/data-format.en.md). None of these files are included in the repository.
 
 ### Data sources
 
@@ -78,6 +78,8 @@ The formats of the optional files are described in [docs/data-format.md](docs/da
 server.py                 Local server: page, data, quote forwarding (standard library only)
 tools/update_universe.py  Builds / refreshes the stock list
 web/                      The page (rendered with three.js, WebGL)
+  nebula-i18n.js            Interface language (Chinese / English) and the switch
+  nebula-lang-en.js         English strings, keyed by the Chinese source text
   nebula-core.js            Quote parsing, validation, trading sessions, nebula layout (pure logic; can be require()d in Node)
   nebula-sim.js             Simulated trading engine (pure logic; money is integer cents)
   nebula-scene.js           3D scene

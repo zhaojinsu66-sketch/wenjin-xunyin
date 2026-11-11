@@ -50,7 +50,7 @@ def fetch_group(name, fs, limit):
         diff, total_now = page(fs, pn)
         total = total if total is not None else total_now
         rows += diff
-        print(f"  {name} 第 {pn} 页，累计 {len(rows)}/{total}", flush=True)
+        print(f"  {name} 第 {pn} 页 / page {pn}，累计 / so far {len(rows)}/{total}", flush=True)
         if not diff or len(rows) >= total or (limit and len(rows) >= limit):
             break
         pn += 1
@@ -75,8 +75,8 @@ def quote_code(market, row):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hk", type=int, default=600, help="港股按成交额取前几只")
-    ap.add_argument("--us", type=int, default=2100, help="美股按成交额取前几只")
+    ap.add_argument("--hk", type=int, default=600, help="港股按成交额取前几只 / how many Hong Kong stocks to take, by turnover")
+    ap.add_argument("--us", type=int, default=2100, help="美股按成交额取前几只 / how many US stocks to take, by turnover")
     args = ap.parse_args()
     stocks, industries, index = [], [], {}
     seen = set()
@@ -85,7 +85,9 @@ def main():
         try:
             rows = fetch_group(market, fs, limit)
         except Exception as error:
-            sys.exit(f"{market} 取名单失败（{type(error).__name__}: {error}）。可能触发了风控，过 30–60 分钟再试；原来的 universe.json 没动。")
+            sys.exit(f"{market} 取名单失败（{type(error).__name__}: {error}）。可能触发了风控，过 30–60 分钟再试；原来的 universe.json 没动。\n"
+                     f"Fetching the {market} list failed ({type(error).__name__}: {error}). The endpoint may be rate-limiting you: "
+                     "wait 30–60 minutes and try again. The existing universe.json was left untouched.")
         for row in rows:
             code = quote_code(market, row)
             name = str(row.get("f14") or "").strip()
@@ -103,13 +105,14 @@ def main():
             seen.add(code)
         time.sleep(1.0)
     if len(stocks) < 1000:
-        sys.exit(f"只取到 {len(stocks)} 只，不像完整名单，没有覆盖原来的 universe.json。")
+        sys.exit(f"只取到 {len(stocks)} 只，不像完整名单，没有覆盖原来的 universe.json。\n"
+                 f"Only {len(stocks)} stocks were fetched, which does not look like a full list; the existing universe.json was not overwritten.")
     as_of = datetime.now(timezone(timedelta(hours=8))).date().isoformat()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     tmp = OUT.with_suffix(".tmp")
     tmp.write_text(json.dumps({"asOf": as_of, "industries": industries, "stocks": stocks}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     tmp.replace(OUT)
-    print(f"写入 {OUT}：{len(stocks)} 只，{len(industries)} 个行业，日期 {as_of}")
+    print(f"写入 / wrote {OUT}：{len(stocks)} 只 / stocks，{len(industries)} 个行业 / industries，日期 / as of {as_of}")
 
 
 if __name__ == "__main__":

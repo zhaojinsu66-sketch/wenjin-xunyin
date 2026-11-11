@@ -10,15 +10,23 @@
 import { NebulaScene, CORE_SOCKET } from './nebula-scene.js';
 
 const Core = window.NebulaCore, Sim = window.NebulaSim;
+const { T, tr, trMsg } = window.NebulaI18n;
+// 页面里写死的文字换成当前语言；换语言的入口有两个（宽屏在顶栏，窄屏在底部说明后面），点了会重新载入页面
+window.NebulaI18n.applyStatic(document);
+for (const [id, other] of [['langBtn', 'EN'], ['langLink', 'English']]) {
+  const el = document.getElementById(id);
+  el.textContent = window.NebulaI18n.lang === 'zh' ? other : '中文';
+  el.addEventListener('click', () => window.NebulaI18n.setLang(window.NebulaI18n.lang === 'zh' ? 'en' : 'zh'));
+}
 const $ = id => document.getElementById(id);
 const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const cls = v => (v > 0 ? 'up' : v < 0 ? 'down' : 'flat');
 const commas = (v, d = 0) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
-const NOTE = '数据来自公开网络，可能延迟或有误，仅供研究。';
+const NOTE = T`数据来自公开网络，可能延迟或有误，仅供研究。`;
 const BATCH = 60;
 const REPLAY_DAY_MS = 1500;
-const INDEX_NAMES = { sh000001: '上证', sh000300: '沪深300', sz399006: '创业板', hkHSI: '恒生', hkHSTECH: '恒生科技', usINX: '标普500', usIXIC: '纳指', usDJI: '道指' };
+const INDEX_NAMES = { sh000001: T`上证`, sh000300: T`沪深300`, sz399006: T`创业板`, hkHSI: T`恒生`, hkHSTECH: T`恒生科技`, usINX: T`标普500`, usIXIC: T`纳指`, usDJI: T`道指` };
 const INDEX_VIEW = { ALL: ['sh000300', 'hkHSI', 'usINX', 'usIXIC'], CN: ['sh000001', 'sh000300', 'sz399006'], HK: ['hkHSI', 'hkHSTECH'], US: ['usINX', 'usIXIC', 'usDJI'] };
 const INDEX_CODES = Object.keys(INDEX_NAMES);
 const MARKETS = ['CN', 'HK', 'US'];
@@ -26,7 +34,7 @@ const MARKETS = ['CN', 'HK', 'US'];
  * 各市场的基准指数：分时、回放路径都用它。minutes 是一天有多少分钟的分时点。
  * Benchmark index of each market, used by the intraday chart and the replay path. minutes is the number of intraday points per day.
  */
-const MARKET_INDEX = { CN: { code: 'sh000300', name: '沪深300', minutes: 240 }, HK: { code: 'hkHSI', name: '恒生', minutes: 330 }, US: { code: 'usINX', name: '标普500', minutes: 390 } };
+const MARKET_INDEX = { CN: { code: 'sh000300', name: T`沪深300`, minutes: 240 }, HK: { code: 'hkHSI', name: T`恒生`, minutes: 330 }, US: { code: 'usINX', name: T`标普500`, minutes: 390 } };
 /**
  * 量行情新不新用的股票：成交最活跃的几只，盘中隔几秒就有新成交。跟指数一起取，不显示。
  * Stocks used to judge quote freshness: the most active names trade every few seconds during the session. Fetched with the indices, not shown.
@@ -38,8 +46,8 @@ const LATE_MS = 180000;   // 比现在晚超过 3 分钟就不能叫实时
  * Backtest results are keyed by this, and so is the comparison index.
  */
 const TEST_KEY = { CN: 'A', HK: 'HK', US: 'US' };
-const BENCH_NAME = { A: '沪深300', HK: '恒生', US: '标普500' };
-const MARKET_NAME = { A: 'A 股', CN: 'A 股', HK: '港股', US: '美股' };
+const BENCH_NAME = { A: T`沪深300`, HK: T`恒生`, US: T`标普500` };
+const MARKET_NAME = { A: T`A 股`, CN: T`A 股`, HK: T`港股`, US: T`美股` };
 const CURRENCY = { CN: 'CNY', HK: 'HKD', US: 'USD' };
 /**
  * 不同币种的成交额粗略折成人民币，只用来比大小（粒子大小、上榜门槛、排序），不显示。
@@ -524,14 +532,14 @@ function setMode(mode) {
   if (mode === 'live') S.sweepOkAt = Date.now();   // 刚开盘切过来，第一批还没回来，不算中断
   const el = $('mode');
   el.className = 'mode ' + (mode === 'live' ? 'live' : mode === 'replay' ? 'replay' : '');
-  $('feedTag').textContent = mode === 'replay' ? '回放' : mode === 'live' ? '实时' : '行情';
+  $('feedTag').textContent = mode === 'replay' ? T`回放` : mode === 'live' ? T`实时` : T`行情`;
   document.querySelector('.feed').classList.toggle('live', mode === 'live');
   // 这一行一直占位（节点的位置要稳定）：回放时是时间轴，开市时是全市场这一轮刷新到哪里，启动时是点亮进度
   const canReplay = (mode === 'replay' || mode === 'closed') && S.history;
   $('playBtn').style.display = mode === 'replay' ? '' : 'none';
   $('liveBtn').style.display = canReplay ? '' : 'none';
-  $('liveBtn').textContent = mode === 'replay' ? '看收盘' : '看回放';
-  if (mode === 'closed') { $('tapeFill').style.width = '100%'; $('replayText').textContent = '最新收盘'; }
+  $('liveBtn').textContent = mode === 'replay' ? T`看收盘` : T`看回放`;
+  if (mode === 'closed') { $('tapeFill').style.width = '100%'; $('replayText').textContent = T`最新收盘`; }
   if (mode === 'replay') {
     S.replay.playing = true;
     S.replay.day = 0;
@@ -556,7 +564,7 @@ function updateModeText() {
   const text = $('modeText');
   if (S.mode === 'boot') {
     const seen = S.seenCount || countSeen();
-    text.textContent = `点亮中 ${commas(seen)}/${commas(S.n)}`;
+    text.textContent = T`点亮中 ${commas(seen)}/${commas(S.n)}`;
   } else if (S.mode === 'live') {
     // “实时”要有依据：时间是这个市场最新报价的时间，不是本机时钟。行情停了这里就停，落后太多就写延迟
     const now = Date.now();
@@ -568,17 +576,17 @@ function updateModeText() {
     const at = Math.max(0, ...(S.forceLive ? MARKETS : fresh).map(atOf));
     const stamp = at ? Core.clock(at) : '';
     const broken = S.sweepOkAt && now - S.sweepOkAt > 30000;
-    const lateText = late.map(m => `${MARKET_NAME[m]} 延迟 ${Math.round((now - atOf(m)) / 60000)} 分`).join(' · ');
-    text.textContent = broken ? `${names(open)} 行情中断 · 最新 ${stamp}`
-      : !late.length ? `${names(open)} 实时 ${stamp}`
-      : fresh.length ? `${names(fresh)} 实时 · ${lateText}` : lateText;
+    const lateText = late.map(m => T`${MARKET_NAME[m]} 延迟 ${Math.round((now - atOf(m)) / 60000)} 分`).join(' · ');
+    text.textContent = broken ? T`${names(open)} 行情中断 · 最新 ${stamp}`
+      : !late.length ? T`${names(open)} 实时 ${stamp}`
+      : fresh.length ? T`${names(fresh)} 实时 · ${lateText}` : lateText;
     $('mode').classList.toggle('live', !broken && !late.length);
-    $('feedTag').textContent = broken || late.length ? '行情' : '实时';
+    $('feedTag').textContent = broken || late.length ? T`行情` : T`实时`;
   } else if (S.mode === 'replay') {
-    text.textContent = '已收盘 · 历史回放';
+    text.textContent = T`已收盘 · 历史回放`;
   } else {
     const ref = S.indices[MARKET_INDEX[focusMarket()].code];
-    text.textContent = '已收盘 · 最新 ' + (ref ? Core.clock(ref.at).slice(0, 5) : '');
+    text.textContent = T`已收盘 · 最新 ${ref ? Core.clock(ref.at).slice(0, 5) : ''}`;
   }
 }
 function countSeen() { let c = 0; for (let i = 0; i < S.n; i++) c += S.seen[i]; return c; }
@@ -598,7 +606,7 @@ async function liveLoop() {
     cursor += BATCH;
     await sweepBatch(slice, 0, false);
     $('tapeFill').style.width = (Math.min(cursor, pool.length) / pool.length * 100).toFixed(1) + '%';
-    $('replayText').textContent = `本轮 ${commas(Math.min(cursor, pool.length))}/${commas(pool.length)}`;
+    $('replayText').textContent = T`本轮 ${commas(Math.min(cursor, pool.length))}/${commas(pool.length)}`;
     await sleep(S.metered ? 1000 : 200);
   }
 }
@@ -809,7 +817,7 @@ function startReplayDay() {
         firePulse(ruleNode, 0.5, true);
       }
       S.eventsSeen = (S.eventsSeen || 0) + 1;
-      feedText(`<time>${esc(date.slice(5))}</time><span class="name">${esc(rule.title)}</span>模拟${e[1] === 'buy' ? '买入' : '卖出'}<span class="name">${esc(e[3])}</span>${commas(e[4])} 股 @ ${Core.fixed(e[5])}`);
+      feedText(e[1] === 'buy' ? T`<time>${esc(date.slice(5))}</time><span class="name">${esc(rule.title)}</span>模拟买入<span class="name">${esc(e[3])}</span>${commas(e[4])} 股 @ ${Core.fixed(e[5])}` : T`<time>${esc(date.slice(5))}</time><span class="name">${esc(rule.title)}</span>模拟卖出<span class="name">${esc(e[3])}</span>${commas(e[4])} 股 @ ${Core.fixed(e[5])}`);
     });
     if (events.length) hitStage('成交');
   }
@@ -872,9 +880,9 @@ function refreshAccount() {
     const value = point ? point[1] : 1;
     setAcct(value * 1000000);
     S.acctBase = 1000000;
-    label.textContent = `规则回测净值 · ${rule.title} · ${date}`;
+    label.textContent = T`规则回测净值 · ${rule.title} · ${date}`;
     const excess = point && bench ? (point[1] / bench[1] - 1) * 100 : null;
-    sub.innerHTML = `累计 <b class="${cls(value - 1)}">${Core.signed((value - 1) * 100)}%</b> · 相对${BENCH_NAME[testKey()]} <b class="${cls(excess)}">${Core.signed(excess)}%</b>`;
+    sub.innerHTML = T`累计 <b class="${cls(value - 1)}">${Core.signed((value - 1) * 100)}%</b> · 相对${BENCH_NAME[testKey()]} <b class="${cls(excess)}">${Core.signed(excess)}%</b>`;
     S.acctReturn = (value - 1) * 100;
   } else {
     const book = S.books[market];
@@ -883,14 +891,14 @@ function refreshAccount() {
     setAcct(e.total / 100);
     S.acctBase = book.capital / 100;
     const hasAny = Object.values(book.positions).some(p => p.qty > 0);
-    label.textContent = (S.mode === 'closed' ? '我的模拟账户 · 已收盘' : '我的模拟账户') + (market === 'CN' ? '' : ' · ' + account.label);
+    label.textContent = (S.mode === 'closed' ? T`我的模拟账户 · 已收盘` : T`我的模拟账户`) + (market === 'CN' ? '' : ' · ' + account.label);
     // 不同币种的账户单独算，不相加；有动静时跟在后面显示
     const tails = ACCOUNTS.filter(a => a.market !== market).map(a => {
       const other = S.books[a.market];
       return Object.values(other.positions).some(p => p.qty > 0) || other.pending.length
         ? ` · ${a.label} <b>${a.unit}${commas(Sim.equity(other, quotes).total / 100, 0)}</b>` : '';
     }).join('');
-    sub.innerHTML = (hasAny ? `今日 <b class="${cls(e.dayPnl)}">${Core.signed(e.dayPnl / 100)}</b> · 累计 <b class="${cls(e.pnl)}">${Core.signed(e.pnl / book.capital * 100)}%</b>` : (tails ? `${account.label}没有持仓` : market === 'US' ? '点星云里的任一只股票，模拟成交' : '点星云里的任一只股票，用真实盘口模拟成交')) + tails;
+    sub.innerHTML = (hasAny ? T`今日 <b class="${cls(e.dayPnl)}">${Core.signed(e.dayPnl / 100)}</b> · 累计 <b class="${cls(e.pnl)}">${Core.signed(e.pnl / book.capital * 100)}%</b>` : (tails ? T`${account.label}没有持仓` : market === 'US' ? T`点星云里的任一只股票，模拟成交` : T`点星云里的任一只股票，用真实盘口模拟成交`)) + tails;
     S.acctReturn = e.pnl / book.capital * 100;
   }
 }
@@ -937,8 +945,8 @@ function settleOrders(quotes, now) {
       const out = Sim.settlePending(S.books[m], inMarket, now, market => Core.sessionOpen(market, now));
       S.books[m] = out.book;
       out.results.forEach(r => {
-        if (r.trade) { feedText(`<span class="name">${esc(r.trade.name)}</span>挂单按开盘价成交 ${commas(r.trade.qty)} 股 @ ${Core.fixed(r.trade.price)}`); hitStage('成交'); }
-        else feedText(`<span class="name">${esc(r.order.name)}</span>${esc(r.reject)}`);
+        if (r.trade) { feedText(T`<span class="name">${esc(r.trade.name)}</span>挂单按开盘价成交 ${commas(r.trade.qty)} 股 @ ${Core.fixed(r.trade.price)}`); hitStage('成交'); }
+        else feedText(`<span class="name">${esc(r.order.name)}</span>${esc(trMsg(r.reject))}`);
       });
       if (out.book.pending.length !== before) changed = true;
     }
@@ -972,26 +980,26 @@ function renderSide() {
   if (window.innerWidth < 900) return;
   const box = $('side');
   const replay = S.mode === 'replay' && S.history;
-  const when = replay ? S.history.days[S.replay.day] : '最新';
+  const when = replay ? S.history.days[S.replay.day] : T`最新`;
   const mover = r => `<button class="mover" data-stock="${r[0]}"><span class="nm">${esc(S.stocks[r[0]].name)}</span><b class="${cls(r[1])}">${Core.signed(r[1])}%</b></button>`;
   const movers = S.movers
-    ? `<div class="side-card"><h4>涨跌榜<span>${esc(when)} · 成交额约 5000 万元以上</span></h4><div class="movers"><div>${S.movers.gain.map(mover).join('')}</div><div>${S.movers.loss.map(mover).join('')}</div></div></div>`
+    ? `<div class="side-card"><h4>${T`涨跌榜`}<span>${T`${esc(when)} · 成交额约 5000 万元以上`}</span></h4><div class="movers"><div>${S.movers.gain.map(mover).join('')}</div><div>${S.movers.loss.map(mover).join('')}</div></div></div>`
     : '';
   // “港股其他”只是没分类的那一堆，不算行业。美股只有 12 个大类，成交额都很大，“全部”时只放 4 个，不然看不到 A 股、港股的行业
   const named = (S.topIndustries || []).filter(s => !s.name.endsWith('其他'));
   const inds = S.view === 'ALL' ? [...named.filter(s => !s.name.startsWith('美股')).slice(0, 8), ...named.filter(s => s.name.startsWith('美股')).slice(0, 4)] : named.slice(0, 12);
   const widest = Math.max(1, ...inds.map(s => Math.abs(s.pct || 0)));
   const industries = inds.length
-    ? `<div class="side-card"><h4>行业涨跌<span>成交额最大的 12 个</span></h4>${inds.map(s => {
+    ? `<div class="side-card"><h4>${T`行业涨跌`}<span>${T`成交额最大的 12 个`}</span></h4>${inds.map(s => {
       const w = Math.abs(s.pct || 0) / widest * 50;
       const bar = s.pct >= 0 ? `left:50%;width:${w.toFixed(1)}%;background:var(--up)` : `right:50%;width:${w.toFixed(1)}%;background:var(--down)`;
-      return `<div class="ind-row"><span class="nm">${esc(s.name)}</span><span class="ind-bar"><i style="${bar}"></i></span><b class="${cls(s.pct)}">${Core.signed(s.pct, 1)}%</b></div>`;
+      return `<div class="ind-row"><span class="nm">${esc(tr(s.name))}</span><span class="ind-bar"><i style="${bar}"></i></span><b class="${cls(s.pct)}">${Core.signed(s.pct, 1)}%</b></div>`;
     }).join('')}</div>`
     : '';
   const rules = S.rules.length
-    ? `<div class="side-card"><h4>研究结论<span>${replay ? '回测累计收益' : '今天符合条件的股票'}</span></h4>${S.rules.map(r => {
+    ? `<div class="side-card"><h4>${T`研究结论`}<span>${replay ? T`回测累计收益` : T`今天符合条件的股票`}</span></h4>${S.rules.map(r => {
       const cum = replay && S.ruleReturns ? S.ruleReturns[r.id] : undefined;
-      return `<button class="rule-row" data-rule="${esc(r.id)}"><span class="nm">${esc(r.title)}</span><small>${esc(r.tagline)}</small><b class="${cum === undefined ? '' : cls(cum)}">${cum === undefined ? ruleHits(r).length + ' 只' : Core.signed(cum, 1) + '%'}</b></button>`;
+      return `<button class="rule-row" data-rule="${esc(r.id)}"><span class="nm">${esc(r.title)}</span><small>${esc(r.tagline)}</small><b class="${cum === undefined ? '' : cls(cum)}">${cum === undefined ? T`${ruleHits(r).length} 只` : Core.signed(cum, 1) + '%'}</b></button>`;
     }).join('')}</div>`
     : '';
   box.innerHTML = movers + industries + rules;
@@ -1007,24 +1015,24 @@ function renderMarket() {
   const b = S.breadth;
   const market = accountMarket();
   const amount = S.mode === 'replay' && S.history ? (market === 'CN' ? S.history.dayAmount[S.replay.day] : null) : (S.amountBy || {})[market];
-  const limits = market === 'CN' ? `<span>${S.mode === 'replay' ? '约 ' : ''}涨停/跌停</span><b><span class="up">${commas(b.limitUp)}</span>/<span class="down">${commas(b.limitDown)}</span></b>` : '';
+  const limits = market === 'CN' ? `<span>${S.mode === 'replay' ? T`约 涨停/跌停` : T`涨停/跌停`}</span><b><span class="up">${commas(b.limitUp)}</span>/<span class="down">${commas(b.limitDown)}</span></b>` : '';
   const unit = { CN: '', HK: 'HK$', US: '$' }[market];
-  $('mkt').innerHTML = `<span>上涨</span><b class="up">${commas(b.up)}</b><span>下跌</span><b class="down">${commas(b.down)}</b>`
-    + limits + (amount ? `<span>${MARKET_NAME[market]}成交</span><b>${unit}${Core.money(amount)}</b>` : '');
+  $('mkt').innerHTML = `<span>${T`上涨`}</span><b class="up">${commas(b.up)}</b><span>${T`下跌`}</span><b class="down">${commas(b.down)}</b>`
+    + limits + (amount ? `<span>${T`${MARKET_NAME[market]}成交`}</span><b>${unit}${Core.money(amount)}</b>` : '');
 }
 
 const STAGES = [
   ['采集', () => commas(S.counters.rows > 99999 ? S.counters.rows / 1000 : S.counters.rows) + (S.counters.rows > 99999 ? 'k' : '')],
-  ['清洗', () => { const bad = S.counters.rejected + S.counters.stale; return bad ? `剔${commas(bad)}` : '0 异常'; }],
-  ['因子', () => { const v = S.ic.summary && S.ic.summary.reversal5; return v ? 'IC' + Core.signed(v.mean, 3).replace('0.', '.') : S.history ? '计算中' : '—'; }],
-  ['信号', () => (S.rules.length ? commas(S.rules.reduce((a, r) => a + ruleHits(r).length, 0)) + ' 只' : '—')],
-  ['组合', () => MARKETS.reduce((n, m) => n + Object.values(S.books[m].positions).filter(p => p.qty > 0).length, 0) + ' 只'],
-  ['成交', () => { const n = MARKETS.reduce((c, m) => c + S.books[m].trades.length, 0); return S.mode === 'replay' && testFor(currentRule()) ? commas(S.eventsSeen || 0) + ' 笔' : n + ' 笔'; }],
+  ['清洗', () => { const bad = S.counters.rejected + S.counters.stale; return bad ? T`剔${commas(bad)}` : T`0 异常`; }],
+  ['因子', () => { const v = S.ic.summary && S.ic.summary.reversal5; return v ? 'IC' + Core.signed(v.mean, 3).replace('0.', '.') : S.history ? T`计算中` : '—'; }],
+  ['信号', () => (S.rules.length ? T`${commas(S.rules.reduce((a, r) => a + ruleHits(r).length, 0))} 只` : '—')],
+  ['组合', () => T`${MARKETS.reduce((n, m) => n + Object.values(S.books[m].positions).filter(p => p.qty > 0).length, 0)} 只`],
+  ['成交', () => { const n = MARKETS.reduce((c, m) => c + S.books[m].trades.length, 0); return S.mode === 'replay' && testFor(currentRule()) ? T`${commas(S.eventsSeen || 0)} 笔` : T`${n} 笔`; }],
   ['净值', () => (S.acctReturn === undefined ? '—' : Core.signed(S.acctReturn, 1) + '%')],
 ];
 function buildPipeline() {
   const box = $('pipeline');
-  box.innerHTML = STAGES.map(([name]) => `<button class="stage-chip" data-stage="${name}"><b>${name}</b><span>—</span></button>`).join('');
+  box.innerHTML = STAGES.map(([name]) => `<button class="stage-chip" data-stage="${name}"><b>${tr(name)}</b><span>—</span></button>`).join('');
   box.addEventListener('click', e => { const c = e.target.closest('[data-stage]'); if (c) openStage(c.dataset.stage); });
   renderPipeline();
 }
@@ -1076,7 +1084,7 @@ function drawBreadth() {
   g.fillStyle = S.breadth.mean >= 0 ? '#FF7A6B' : '#2BD68A';
   g.font = '500 10px ' + getComputedStyle(document.body).getPropertyValue('--mono');
   g.textAlign = 'right';
-  g.fillText('均 ' + Core.signed(S.breadth.mean) + '%', w - 5, 12);
+  g.fillText(T`均 ${Core.signed(S.breadth.mean)}%`, w - 5, 12);
 }
 
 let ball = { x: 0, v: 0 };
@@ -1113,24 +1121,24 @@ function drawWell(dt) {
   g.textAlign = 'right';
   g.fillStyle = tilt >= 0 ? '#FF7A6B' : '#2BD68A';
   // 势阱合并的临界点 |h| = 2/(3√3) ≈ 0.385
-  g.fillText(Math.abs(hField) > 0.385 ? (tilt >= 0 ? '一边倒·多' : '一边倒·空') : (tilt >= 0 ? '拉锯偏多' : '拉锯偏空'), w - 5, 12);
+  g.fillText(Math.abs(hField) > 0.385 ? (tilt >= 0 ? T`一边倒·多` : T`一边倒·空`) : (tilt >= 0 ? T`拉锯偏多` : T`拉锯偏空`), w - 5, 12);
 }
 
 function drawFunnel() {
   const { g, w, h } = setupPanelCanvas('pFunnel');
   const replay = S.mode === 'replay' && S.history;
   const focus = MARKET_INDEX[focusMarket()];
-  let pts = [], total = focus.minutes, sigma = indexSigma(focus.code), title = '波动漏斗';
+  let pts = [], total = focus.minutes, sigma = indexSigma(focus.code), title = T`波动漏斗`;
   if (replay) {
     const close = (S.history.indices[focus.code] || {}).close || [];
     const start = close.find(v => v > 0) || 1;
     pts = close.slice(0, S.replay.day + 1).map(v => (v > 0 ? v / start - 1 : null)).filter(v => v !== null);
     total = S.history.cols - 1;
-    title = focus.name + ' 路径';
+    title = T`${focus.name} 路径`;
   } else if (S.minute.points.length && S.minute.code === focus.code) {
     const base = S.minute.prev || S.minute.points[0].p;
     pts = S.minute.points.map(p => p.p / base - 1);
-    title = focus.name + ' 分时';
+    title = T`${focus.name} 分时`;
   }
   if ($('funnelTitle').textContent !== title) $('funnelTitle').textContent = title;
   const left = 6, right = w - 8, cy = (h + 12) / 2;
@@ -1176,7 +1184,7 @@ function feedStock(i) {
   const open = m => S.forceLive || Core.sessionLive(m, now, (S.indices[MARKET_INDEX[m].code] || {}).at);
   const live = open(s.market);
   if (!live && MARKETS.some(open)) return;   // 有市场在交易时只滚它的；休市的报价不能打上现在的时间
-  feedText(`<time>${live ? Core.clock(now).slice(0, 8) : '休市'}</time><span class="name">${esc(s.name)}</span><span>${Core.fixed(S.price[i])}</span> <span class="${cls(S.pct[i])}">${Core.signed(S.pct[i])}%</span>`);
+  feedText(`<time>${live ? Core.clock(now).slice(0, 8) : T`休市`}</time><span class="name">${esc(s.name)}</span><span>${Core.fixed(S.price[i])}</span> <span class="${cls(S.pct[i])}">${Core.signed(S.pct[i])}%</span>`);
 }
 function feedReplay(i, pct) {
   feedText(`<time>${esc(S.history.days[S.replay.day].slice(5))}</time><span class="name">${esc(S.stocks[i].name)}</span><span class="${cls(pct)}">${Core.signed(pct)}%</span>`);
@@ -1207,12 +1215,12 @@ function feedFrame(dt) {
 // ---------------------------------------------------------------- 覆盖层：节点、连线、脉冲 / Overlay: nodes, cables, pulses
 
 const LEFT_NODES = [
-  { name: '实时行情', sub: () => S.mode === 'replay' ? '收盘' : `${S.counters.lastLatency || '—'} ms` },
-  { name: '五档盘口', sub: () => `${commas(S.full.size)} 只` },
-  { name: '指数分时', sub: () => `${commas(S.counters.minute)} 点` },
-  { name: '盘后全市场', sub: () => (S.history ? `${S.history.cols} 日` : '—') },
-  { name: '行业财务', sub: () => `${S.industries.length} 业` },
-  { name: '复权日线', sub: () => (S.rulesAsOf ? S.rulesAsOf.slice(5) : '—') },
+  { name: T`实时行情`, sub: () => S.mode === 'replay' ? T`收盘` : `${S.counters.lastLatency || '—'} ms` },
+  { name: T`五档盘口`, sub: () => T`${commas(S.full.size)} 只` },
+  { name: T`指数分时`, sub: () => T`${commas(S.counters.minute)} 点` },
+  { name: T`盘后全市场`, sub: () => (S.history ? T`${S.history.cols} 日` : '—') },
+  { name: T`行业财务`, sub: () => T`${S.industries.length} 业` },
+  { name: T`复权日线`, sub: () => (S.rulesAsOf ? S.rulesAsOf.slice(5) : '—') },
 ];
 
 function layout() {
@@ -1289,7 +1297,7 @@ function buildNodes() {
     // 回放时显示这套规则到当天的累计收益（回测），其他时候显示今天命中几只
     const sub = () => {
       const cum = S.mode === 'replay' && S.ruleReturns ? S.ruleReturns[rule.id] : undefined;
-      return cum === undefined ? `${ruleHits(rule).length} 只` : Core.signed(cum, 1) + '%';
+      return cum === undefined ? T`${ruleHits(rule).length} 只` : Core.signed(cum, 1) + '%';
     };
     return Object.assign(nodes.right[k] || { glow: 0, load: 0, pulses: [] }, { x, y, angle: socketAngle(1, k, count), name: rule.title, sub, side: 1, c1: { x: x - 34, y }, rule: rule.id });
   });
@@ -1466,7 +1474,7 @@ function overlayFrame(dt) {
         placed.push(p);
         drawn++;
         const alpha = clamp((p.front - 0.25) / 0.4, 0, 1);
-        const text = ind.name;
+        const text = tr(ind.name);
         const pct = Core.signed(ind.pct) + '%';
         g.font = '500 10px system-ui,sans-serif';
         const tw = g.measureText(text).width;
@@ -1604,7 +1612,7 @@ function loop(now) {
       recount(); renderMarket(); hitStage('采集'); hitStage('清洗');
       if (now - (S.moversAt || 0) > 700) { S.moversAt = now; updateRays(); updateMovers(); }
       $('tapeFill').style.width = (S.seenCount / (S.n || 1) * 100).toFixed(1) + '%';
-      $('replayText').textContent = `点亮 ${commas(S.seenCount)}/${commas(S.n)}`;
+      $('replayText').textContent = T`点亮 ${commas(S.seenCount)}/${commas(S.n)}`;
     }
     else if (S.mode === 'live') { renderMarket(); }
     else if (S.mode === 'closed') { renderMarket(); }
@@ -1707,10 +1715,10 @@ function renderSheet() {
   } else if (st.kind === 'trade') {
     renderTradeSheet();
   } else if (st.kind === 'search') {
-    titleEl.textContent = '查找股票';
-    subEl.textContent = `全市场 ${commas(S.n)} 只`;
-    const missing = st.missing ? `<div class="sec card small" style="margin-bottom:8px">星云的股票名单里没有 ${esc(st.missing)}，这只暂时不能在这里模拟买卖。可以换一只。</div>` : '';
-    body.innerHTML = `${missing}<input class="search" id="q" placeholder="名称或代码" autocomplete="off" value="${esc(st.query)}"><div id="qr" class="sec"></div>`;
+    titleEl.textContent = T`查找股票`;
+    subEl.textContent = T`全市场 ${commas(S.n)} 只`;
+    const missing = st.missing ? `<div class="sec card small" style="margin-bottom:8px">${T`星云的股票名单里没有 ${esc(st.missing)}，这只暂时不能在这里模拟买卖。可以换一只。`}</div>` : '';
+    body.innerHTML = `${missing}<input class="search" id="q" placeholder="${T`名称或代码`}" autocomplete="off" value="${esc(st.query)}"><div id="qr" class="sec"></div>`;
     const input = $('q');
     const run = () => {
       st.query = input.value.trim();
@@ -1729,28 +1737,28 @@ function renderSheet() {
 function stockRow(i, extra = '') {
   const s = S.stocks[i];
   const pct = S.pct[i];
-  return `<button class="row" data-stock="${i}"><div class="grow"><div class="t">${esc(s.name)}</div><div class="d">${esc(s.code)} · ${esc(s.industry || (s.market === 'HK' ? '港股' : ''))}${extra}</div></div>`
+  return `<button class="row" data-stock="${i}"><div class="grow"><div class="t">${esc(s.name)}</div><div class="d">${esc(s.code)} · ${esc(tr(s.industry || (s.market === 'HK' ? T`港股` : '')))}${extra}</div></div>`
     + `<div class="n">${Core.fixed(S.price[i])}<small class="${cls(pct)}">${Core.signed(pct)}%</small></div></button>`;
 }
 
-const ACCOUNTS = [{ market: 'CN', label: '人民币账户', unit: '¥' }, { market: 'HK', label: '港币账户', unit: 'HK$' }, { market: 'US', label: '美元账户', unit: '$' }];
+const ACCOUNTS = [{ market: 'CN', label: T`人民币账户`, unit: '¥' }, { market: 'HK', label: T`港币账户`, unit: 'HK$' }, { market: 'US', label: T`美元账户`, unit: '$' }];
 const unitOf = code => (code.startsWith('hk') ? 'HK$' : code.startsWith('us') ? '$' : '¥');
 
 const STAGE_VIEWS = {
   采集() {
     const c = S.counters;
     return {
-      title: '采集', sub: '实时行情一批批进入星云',
+      title: T`采集`, sub: T`实时行情一批批进入星云`,
       html: `<div class="sec card"><div class="kv">
-          <div><span>已收到</span><b>${commas(c.rows)}</b></div><div><span>批次</span><b>${commas(c.batches)}</b></div><div><span>全市场一轮</span><b>${S.roundSeconds ? S.roundSeconds + ' 秒' : '—'}</b></div>
-          <div><span>覆盖股票</span><b>${commas(countSeen())}/${commas(S.n)}</b></div><div><span>五档盘口</span><b>${commas(S.full.size)} 只</b></div><div><span>流量</span><b>${Core.fixed(c.bytes / 1048576, 1)} MB</b></div></div></div>
-        <div class="sec"><h4>每一路数据做什么</h4><div class="card">
-          <div class="src"><b>实时行情</b><p>正在交易的市场滚动刷新现价、涨跌、成交额，价格变了粒子才闪。美股和 A 股、港股的交易时间不重叠，不交易的市场不刷新。美股报价约 20 秒更新一次。</p></div>
-          <div class="src"><b>五档盘口</b><p>规则命中、持仓和正在看的股票，4 秒一次，带买卖五档，模拟成交按它吃单。美股没有盘口数据，按最新价估算。</p></div>
-          <div class="src"><b>指数分时</b><p>${MARKET_INDEX[focusMarket()].name} 当日每分钟点位，画波动漏斗。</p></div>
-          <div class="src"><b>盘后全市场</b><p>${S.history ? `收盘后回放用的全市场日线，共 ${S.history.cols} 个交易日。回放的每一天都是当天真实涨跌，没有补算。` : '可选数据（data/history.json），现在没有，所以收盘后不回放。'}</p></div>
-          <div class="src"><b>行业财务</b><p>行业分类来自股票名单，决定粒子聚在哪。</p></div>
-          <div class="src"><b>复权日线</b><p>${S.rules.length ? `规则计算和回测用，数据日期 ${esc(S.rulesAsOf || '—')}。除权除息按前收盘比例复权。` : '可选数据（data/rules.json），规则信号和回测用。现在没有，所以不显示信号。'}</p></div>
+          <div><span>${T`已收到`}</span><b>${commas(c.rows)}</b></div><div><span>${T`批次`}</span><b>${commas(c.batches)}</b></div><div><span>${T`全市场一轮`}</span><b>${S.roundSeconds ? T`${S.roundSeconds} 秒` : '—'}</b></div>
+          <div><span>${T`覆盖股票`}</span><b>${commas(countSeen())}/${commas(S.n)}</b></div><div><span>${T`五档盘口`}</span><b>${T`${commas(S.full.size)} 只`}</b></div><div><span>${T`流量`}</span><b>${Core.fixed(c.bytes / 1048576, 1)} MB</b></div></div></div>
+        <div class="sec"><h4>${T`每一路数据做什么`}</h4><div class="card">
+          <div class="src"><b>${T`实时行情`}</b><p>${T`正在交易的市场滚动刷新现价、涨跌、成交额，价格变了粒子才闪。美股和 A 股、港股的交易时间不重叠，不交易的市场不刷新。美股报价约 20 秒更新一次。`}</p></div>
+          <div class="src"><b>${T`五档盘口`}</b><p>${T`规则命中、持仓和正在看的股票，4 秒一次，带买卖五档，模拟成交按它吃单。美股没有盘口数据，按最新价估算。`}</p></div>
+          <div class="src"><b>${T`指数分时`}</b><p>${T`${MARKET_INDEX[focusMarket()].name} 当日每分钟点位，画波动漏斗。`}</p></div>
+          <div class="src"><b>${T`盘后全市场`}</b><p>${S.history ? T`收盘后回放用的全市场日线，共 ${S.history.cols} 个交易日。回放的每一天都是当天真实涨跌，没有补算。` : T`可选数据（data/history.json），现在没有，所以收盘后不回放。`}</p></div>
+          <div class="src"><b>${T`行业财务`}</b><p>${T`行业分类来自股票名单，决定粒子聚在哪。`}</p></div>
+          <div class="src"><b>${T`复权日线`}</b><p>${S.rules.length ? T`规则计算和回测用，数据日期 ${esc(S.rulesAsOf || '—')}。除权除息按前收盘比例复权。` : T`可选数据（data/rules.json），规则信号和回测用。现在没有，所以不显示信号。`}</p></div>
         </div></div>`,
     };
   },
@@ -1759,32 +1767,32 @@ const STAGE_VIEWS = {
     const dead = [];
     for (let i = 0; i < S.n && dead.length < 12; i++) if (S.seen[i] && !(S.amount[i] > 0) && Math.abs(S.pct[i]) < 1e-6) dead.push(i);
     return {
-      title: '清洗', sub: '不合格的数据不进入计算',
-      html: `<div class="sec card"><div class="kv"><div><span>有效</span><b>${commas(S.breadth.n)}</b></div><div><span>停牌或无成交</span><b>${commas(c.stale)}</b></div><div><span>拒收</span><b>${commas(c.rejected)}</b></div></div></div>
-        <div class="sec"><h4>每条行情都要过这几关</h4><div class="card">
-          <div class="check"><i>·</i><span>没有现价或昨收的记录不要。</span></div>
-          <div class="check"><i>·</i><span>最高价低于最低价、现价跑到当日高低点之外、超出涨跌停 1% 的记录拒收。</span></div>
-          <div class="check"><i>·</i><span>成交额为 0 且现价等于昨收的是停牌或未开盘：显示成灰色，不算涨跌，也不能模拟成交。</span></div>
-          <div class="check"><i>·</i><span>除权除息用前收盘比例复权，不用减法，长区间才不会失真。</span></div>
+      title: T`清洗`, sub: T`不合格的数据不进入计算`,
+      html: `<div class="sec card"><div class="kv"><div><span>${T`有效`}</span><b>${commas(S.breadth.n)}</b></div><div><span>${T`停牌或无成交`}</span><b>${commas(c.stale)}</b></div><div><span>${T`拒收`}</span><b>${commas(c.rejected)}</b></div></div></div>
+        <div class="sec"><h4>${T`每条行情都要过这几关`}</h4><div class="card">
+          <div class="check"><i>·</i><span>${T`没有现价或昨收的记录不要。`}</span></div>
+          <div class="check"><i>·</i><span>${T`最高价低于最低价、现价跑到当日高低点之外、超出涨跌停 1% 的记录拒收。`}</span></div>
+          <div class="check"><i>·</i><span>${T`成交额为 0 且现价等于昨收的是停牌或未开盘：显示成灰色，不算涨跌，也不能模拟成交。`}</span></div>
+          <div class="check"><i>·</i><span>${T`除权除息用前收盘比例复权，不用减法，长区间才不会失真。`}</span></div>
         </div></div>
-        ${dead.length ? `<div class="sec"><h4>当前停牌或无成交（前 ${dead.length} 只）</h4><div class="card">${dead.map(i => stockRow(i)).join('')}</div></div>` : ''}`,
+        ${dead.length ? `<div class="sec"><h4>${T`当前停牌或无成交（前 ${dead.length} 只）`}</h4><div class="card">${dead.map(i => stockRow(i)).join('')}</div></div>` : ''}`,
       after: bindRows,
     };
   },
   因子() {
-    const rows = [['reversal5', '近 5 日反转', '−(P_t/P_{t−5} − 1)'], ['momentum20', '近 20 日动量', 'P_t/P_{t−20} − 1'], ['vol20', '近 20 日波动率', 'std(r_{t−19..t})']];
+    const rows = [['reversal5', T`近 5 日反转`, '−(P_t/P_{t−5} − 1)'], ['momentum20', T`近 20 日动量`, 'P_t/P_{t−20} − 1'], ['vol20', T`近 20 日波动率`, 'std(r_{t−19..t})']];
     return {
-      title: '因子', sub: S.history ? `${S.history.days[20]} 起的全市场横截面` : '',
-      html: `<div class="sec"><h4>全市场 Rank IC（因子值和之后 5 日收益的秩相关）</h4>
+      title: T`因子`, sub: S.history ? T`${S.history.days[20]} 起的全市场横截面` : '',
+      html: `<div class="sec"><h4>${T`全市场 Rank IC（因子值和之后 5 日收益的秩相关）`}</h4>
         ${rows.map(([key, name, formula]) => {
           const v = S.ic.summary && S.ic.summary[key];
           return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-weight:500">${name}</b><span class="formula">${formula}</span></div>
-            ${v ? `<div class="kv" style="margin-top:6px"><div><span>IC 均值</span><b class="${cls(v.mean)}">${Core.signed(v.mean, 3)}</b></div><div><span>ICIR</span><b>${Core.signed(v.icir, 2)}</b></div><div><span>IC 为正</span><b>${(v.positive * 100).toFixed(0)}%</b></div></div>
-              <canvas class="chart" style="height:54px;margin-top:6px" data-ic="${key}"></canvas>` : `<p class="small">${S.history ? '计算中…' : '需要收盘回放数据（data/history.json）才能算。'}</p>`}</div>`;
+            ${v ? `<div class="kv" style="margin-top:6px"><div><span>${T`IC 均值`}</span><b class="${cls(v.mean)}">${Core.signed(v.mean, 3)}</b></div><div><span>ICIR</span><b>${Core.signed(v.icir, 2)}</b></div><div><span>${T`IC 为正`}</span><b>${(v.positive * 100).toFixed(0)}%</b></div></div>
+              <canvas class="chart" style="height:54px;margin-top:6px" data-ic="${key}"></canvas>` : `<p class="small">${S.history ? T`计算中…` : T`需要收盘回放数据（data/history.json）才能算。`}</p>`}</div>`;
         }).join('')}
-        <p class="small" style="margin-top:8px">样本只有 ${S.ic.summary && S.ic.summary.reversal5 ? S.ic.summary.reversal5.n : '—'} 个交易日，5 日收益有重叠，只能看方向，不能当作规则有效的证据。经验上 |IC| 大于 0.03、|ICIR| 大于 0.3 才值得继续研究；多试几个因子总会撞到好看的数字，所以要看滚动窗口和分行情段。</p></div>
-        <div class="sec"><h4>从数据到因子的步骤</h4><div class="card formula">
-          对数收益 r = ln(P_t / P_{t−1})<br>去极值 Winsorize 到 ±3 倍 MAD<br>标准化 z = (x − μ) / σ（行业内）<br>中性化：对市值、行业回归取残差<br>IC = corr(rank(f_t), rank(r_{t+h}))，ICIR = IC 均值 / IC 标准差</div></div>`,
+        <p class="small" style="margin-top:8px">${T`样本只有 ${S.ic.summary && S.ic.summary.reversal5 ? S.ic.summary.reversal5.n : '—'} 个交易日，5 日收益有重叠，只能看方向，不能当作规则有效的证据。经验上 |IC| 大于 0.03、|ICIR| 大于 0.3 才值得继续研究；多试几个因子总会撞到好看的数字，所以要看滚动窗口和分行情段。`}</p></div>
+        <div class="sec"><h4>${T`从数据到因子的步骤`}</h4><div class="card formula">
+          ${T`对数收益`} r = ln(P_t / P_{t−1})<br>${T`去极值 Winsorize 到 ±3 倍 MAD`}<br>${T`标准化 z = (x − μ) / σ（行业内）`}<br>${T`中性化：对市值、行业回归取残差`}<br>IC = corr(rank(f_t), rank(r_{t+h}))${T`，ICIR = IC 均值 / IC 标准差`}</div></div>`,
       after(body) {
         body.querySelectorAll('[data-ic]').forEach(c => drawSeries(c, S.ic.series[c.dataset.ic].filter(x => x !== null), { bars: true }));
       },
@@ -1792,13 +1800,13 @@ const STAGE_VIEWS = {
   },
   信号(st) {
     const rule = S.rules.find(r => r.id === (st.rule || S.ruleId)) || S.rules[0];
-    if (!rule) return { title: '信号', sub: '', html: `<p class="small">${S.rulesMissing ? '没有规则数据（data/rules.json 是可选的），所以没有信号。格式见项目说明。' : '规则数据还没准备好，请稍后再试。'}</p>` };
+    if (!rule) return { title: T`信号`, sub: '', html: `<p class="small">${S.rulesMissing ? T`没有规则数据（data/rules.json 是可选的），所以没有信号。格式见项目说明。` : T`规则数据还没准备好，请稍后再试。`}</p>` };
     return {
-      title: '研究结论', sub: `${rule.title} · ${rule.tagline} · 股票池 ${commas(rule.poolSize)} 只`,
+      title: T`研究结论`, sub: `${rule.title} · ${rule.tagline} · ${T`股票池 ${commas(rule.poolSize)} 只`}`,
       html: `<div class="tabs">${S.rules.map(r => `<button data-rule="${esc(r.id)}" class="${r.id === rule.id ? 'on' : ''}">${esc(r.title)} ${ruleHits(r).length}</button>`).join('')}</div>
         <p class="small" style="margin:6px 0 4px">${esc(rule.summary)}</p>
         ${rule.relaxNote ? `<p class="small" style="color:#ffdc9a">${esc(rule.relaxNote)}</p>` : ''}
-        ${ruleHits(rule).length ? `<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:4px 0">${st.basketNote ? `<span class="small" style="color:#ffdc9a">${esc(st.basketNote)}</span>` : ''}<button class="chip" id="hitsToBasket">这一组 ${ruleHits(rule).length} 只加入篮子</button></div>` : `<p class="small" style="margin:6px 0">${esc(MARKET_NAME[S.view])}今天没有符合这套规则的股票。</p>`}
+        ${ruleHits(rule).length ? `<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:4px 0">${st.basketNote ? `<span class="small" style="color:#ffdc9a">${esc(st.basketNote)}</span>` : ''}<button class="chip" id="hitsToBasket">${T`这一组 ${ruleHits(rule).length} 只加入篮子`}</button></div>` : `<p class="small" style="margin:6px 0">${(S.view === 'ALL' ? T`今天没有符合这套规则的股票。` : T`${esc(MARKET_NAME[S.view])}今天没有符合这套规则的股票。`)}</p>`}
         <div id="fanRows">${ruleHits(rule).map(h => {
           const i = S.codeIndex.get(h.code);
           if (i === undefined) return '';
@@ -1808,7 +1816,7 @@ const STAGE_VIEWS = {
         }).join('')}</div>
         ${testFor(rule) ? backtestCard(rule, testKey()) : `<div class="sec"><p class="small">${esc(rule.noBacktestReason || '')}</p></div>`}
         ${trackingCard(rule)}
-        <p class="small" style="margin-top:8px">星级表示这只股票的数据与规则条件的符合程度，不预测涨跌。规则依据 ${esc(S.rulesAsOf || '')} 的数据。</p>`,
+        <p class="small" style="margin-top:8px">${T`星级表示这只股票的数据与规则条件的符合程度，不预测涨跌。规则依据 ${esc(S.rulesAsOf || '')} 的数据。`}</p>`,
       after(body) {
         if (rule.id !== S.ruleId) { S.ruleId = rule.id; refreshAccount(); }
         const hits = ruleHits(rule).map(h => S.codeIndex.get(h.code)).filter(i => i !== undefined);
@@ -1818,7 +1826,7 @@ const STAGE_VIEWS = {
         const toBasket = body.querySelector('#hitsToBasket');
         if (toBasket) toBasket.onclick = () => {
           const added = addToBasket(ruleHits(rule).map(h => h.code).filter(c => S.codeIndex.has(c)));
-          st.basketNote = added ? `已加入 ${added} 只，点右上角的篮子一起模拟买卖` : S.basket.length >= BASKET_MAX ? `篮子最多放 ${BASKET_MAX} 只` : '这一组已经都在篮子里';
+          st.basketNote = added ? T`已加入 ${added} 只，点右上角的篮子一起模拟买卖` : S.basket.length >= BASKET_MAX ? T`篮子最多放 ${BASKET_MAX} 只` : T`这一组已经都在篮子里`;
           renderSheet();
         };
         bindRows(body);
@@ -1831,14 +1839,14 @@ const STAGE_VIEWS = {
     const test = testFor(rule);
     const quotes = Object.fromEntries(S.full);
     return {
-      title: '净值', sub: rule ? `${rule.title} 的回测和我的模拟账户` : '我的模拟账户',
+      title: T`净值`, sub: rule ? T`${rule.title} 的回测和我的模拟账户` : T`我的模拟账户`,
       html: ACCOUNTS.filter(a => a.market === accountMarket() || S.books[a.market].trades.length).map(({ market, label, unit }) => {
         const book = S.books[market];
         const e = Sim.equity(book, quotes);
-        return `<div class="sec card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h4 class="small">${label} · 账号 ${Sim.accountId(market, book)}</h4><button class="chip" data-days="${market}">每日对账 ›</button></div><div class="kv"><div><span>净值</span><b>${unit}${commas(e.total / 100, 0)}</b></div><div><span>累计收益</span><b class="${cls(e.pnl)}">${Core.signed(e.pnl / book.capital * 100)}%</b></div><div><span>今日</span><b class="${cls(e.dayPnl)}">${Core.signed(e.dayPnl / 100, 0)}</b></div></div>
-          ${book.equityDays.length >= 2 ? `<canvas class="chart" style="height:96px;margin-top:8px" data-equity="${market}"></canvas><p class="small">${esc(book.equityDays[0][0])} 起，每个交易日收盘记一个点。</p>` : '<p class="small" style="margin-top:6px">净值曲线从下一个交易日开始记录，至少两天才有线。</p>'}</div>`;
+        return `<div class="sec card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h4 class="small">${label} · ${T`账号 ${Sim.accountId(market, book)}`}</h4><button class="chip" data-days="${market}">${T`每日对账 ›`}</button></div><div class="kv"><div><span>${T`净值`}</span><b>${unit}${commas(e.total / 100, 0)}</b></div><div><span>${T`累计收益`}</span><b class="${cls(e.pnl)}">${Core.signed(e.pnl / book.capital * 100)}%</b></div><div><span>${T`今日`}</span><b class="${cls(e.dayPnl)}">${Core.signed(e.dayPnl / 100, 0)}</b></div></div>
+          ${book.equityDays.length >= 2 ? `<canvas class="chart" style="height:96px;margin-top:8px" data-equity="${market}"></canvas><p class="small">${T`${esc(book.equityDays[0][0])} 起，每个交易日收盘记一个点。`}</p>` : `<p class="small" style="margin-top:6px">${T`净值曲线从下一个交易日开始记录，至少两天才有线。`}</p>`}</div>`;
       }).join('') + (test ? backtestCard(rule, testKey())
-        + `<div class="sec"><h4>${esc(rule.title)} 回测的成交（${esc(test.start)} 至 ${esc(test.end)}）</h4><div class="card"><div class="kv"><div><span>模拟买入</span><b>${commas(test.buys)} 笔</b></div><div><span>买不进</span><b>${commas(test.blockedBuys)}</b></div><div><span>卖单顺延</span><b>${commas(test.delayedSells)}</b></div><div><span>成本占本金</span><b>${(test.costRatio * 100).toFixed(2)}%</b></div></div>
+        + `<div class="sec"><h4>${T`${esc(rule.title)} 回测的成交（${esc(test.start)} 至 ${esc(test.end)}）`}</h4><div class="card"><div class="kv"><div><span>${T`模拟买入`}</span><b>${T`${commas(test.buys)} 笔`}</b></div><div><span>${T`买不进`}</span><b>${commas(test.blockedBuys)}</b></div><div><span>${T`卖单顺延`}</span><b>${commas(test.delayedSells)}</b></div><div><span>${T`成本占本金`}</span><b>${(test.costRatio * 100).toFixed(2)}%</b></div></div>
           ${test.note ? `<p class="small" style="margin-top:6px">${esc(test.note)}</p>` : ''}</div></div>` : ''),
       after(body) {
         drawBacktest(body);
@@ -1859,21 +1867,21 @@ const STAGE_VIEWS = {
 function trackingCard(rule) {
   const rows = (S.tracking || []).filter(t => t.rule === rule.id && (S.view === 'ALL' || TEST_KEY[S.view] === t.market));
   const percent = v => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
-  const body = rows.map(t => `<div class="kv"><div><span>${MARKET_NAME[t.market]} ${t.horizon} 日（${t.days} 天）</span><b class="${cls(t.avgReturn)}">${percent(t.avgReturn)}</b></div>
-    <div><span>相对指数</span><b class="${cls(t.avgExcess)}">${percent(t.avgExcess)}</b></div><div><span>跑赢天数</span><b>${Math.round(t.beatShare * 100)}%</b></div></div>`).join('');
-  const empty = S.trackingSince ? '还没有到期的记录，满 5 个交易日后出第一个结果。' : '今天收盘后开始记录。';
-  return `<div class="sec"><h4>结论跟踪${S.trackingSince ? `（${esc(S.trackingSince)} 起）` : ''}</h4><div class="card">${body || `<p class="small">${empty}</p>`}
-    <p class="small" style="margin-top:6px">每天收盘后记下选出的股票，从下一个交易日开盘算起，到期后和同期指数比较，未扣交易成本。</p></div></div>`;
+  const body = rows.map(t => `<div class="kv"><div><span>${T`${MARKET_NAME[t.market]} ${t.horizon} 日（${t.days} 天）`}</span><b class="${cls(t.avgReturn)}">${percent(t.avgReturn)}</b></div>
+    <div><span>${T`相对指数`}</span><b class="${cls(t.avgExcess)}">${percent(t.avgExcess)}</b></div><div><span>${T`跑赢天数`}</span><b>${Math.round(t.beatShare * 100)}%</b></div></div>`).join('');
+  const empty = S.trackingSince ? T`还没有到期的记录，满 5 个交易日后出第一个结果。` : T`今天收盘后开始记录。`;
+  return `<div class="sec"><h4>${T`结论跟踪`}${S.trackingSince ? T`（${esc(S.trackingSince)} 起）` : ''}</h4><div class="card">${body || `<p class="small">${empty}</p>`}
+    <p class="small" style="margin-top:6px">${T`每天收盘后记下选出的股票，从下一个交易日开盘算起，到期后和同期指数比较，未扣交易成本。`}</p></div></div>`;
 }
 
 function backtestCard(rule, market) {
   const t = rule.backtests[market];
   const excess = t.ruleReturn - t.benchmarkReturn;
-  return `<div class="sec"><h4>这套规则过去的表现（${esc(t.start)} 至 ${esc(t.end)}，${t.periods} 次换股）</h4><div class="card">
+  return `<div class="sec"><h4>${T`这套规则过去的表现（${esc(t.start)} 至 ${esc(t.end)}，${t.periods} 次换股）`}</h4><div class="card">
     <canvas class="chart" id="btChart" data-rule="${esc(rule.id)}" data-market="${market}"></canvas>
-    <div class="kv" style="margin-top:8px"><div><span>规则累计</span><b class="${cls(t.ruleReturn)}">${Core.signed(t.ruleReturn * 100, 1)}%</b></div><div><span>${BENCH_NAME[market]}</span><b class="${cls(t.benchmarkReturn)}">${Core.signed(t.benchmarkReturn * 100, 1)}%</b></div><div><span>相对</span><b class="${cls(excess)}">${Core.signed(excess * 100, 1)}%</b></div>
-    <div><span>最大回撤</span><b>${(t.maxDrawdown * 100).toFixed(1)}%</b></div><div><span>指数回撤</span><b>${(t.benchmarkMaxDrawdown * 100).toFixed(1)}%</b></div><div><span>跑赢次数</span><b>${t.beat}/${t.periods}</b></div></div>
-    <p class="small" style="margin-top:6px">${t.note ? esc(t.note) + ' ' : ''}样本只有 ${t.periods} 次换股，不代表未来。</p></div></div>`;
+    <div class="kv" style="margin-top:8px"><div><span>${T`规则累计`}</span><b class="${cls(t.ruleReturn)}">${Core.signed(t.ruleReturn * 100, 1)}%</b></div><div><span>${BENCH_NAME[market]}</span><b class="${cls(t.benchmarkReturn)}">${Core.signed(t.benchmarkReturn * 100, 1)}%</b></div><div><span>${T`相对`}</span><b class="${cls(excess)}">${Core.signed(excess * 100, 1)}%</b></div>
+    <div><span>${T`最大回撤`}</span><b>${(t.maxDrawdown * 100).toFixed(1)}%</b></div><div><span>${T`指数回撤`}</span><b>${(t.benchmarkMaxDrawdown * 100).toFixed(1)}%</b></div><div><span>${T`跑赢次数`}</span><b>${t.beat}/${t.periods}</b></div></div>
+    <p class="small" style="margin-top:6px">${t.note ? esc(t.note) + ' ' : ''}${T`样本只有 ${t.periods} 次换股，不代表未来。`}</p></div></div>`;
 }
 
 function drawBacktest(body) {
@@ -1918,7 +1926,7 @@ function drawSeries(canvas, a, { second = null, bars = false, zero = 0, labels =
     g.fillStyle = '#7d7a73'; g.font = '9.5px ui-monospace,Consolas,monospace';
     g.textAlign = 'left'; g.fillText(labels[0], 2, h - 2);
     g.textAlign = 'right'; g.fillText(labels[1], w - 2, h - 2);
-    g.fillStyle = '#FFC46B'; g.textAlign = 'left'; g.fillText('规则', 4, 11);
+    g.fillStyle = '#FFC46B'; g.textAlign = 'left'; g.fillText(T`规则`, 4, 11);
     if (second) { g.fillStyle = 'rgba(120,175,255,1)'; g.fillText(secondName, 32, 11); }
   }
 }
@@ -1953,7 +1961,7 @@ function renderStockSheet() {
   const market = s.market;
   const session = Core.sessionOpen(market, Date.now());
   const us = market === 'US';
-  $('sheetSub').textContent = `${us ? s.code.slice(2) : s.code} · ${s.industry || (market === 'HK' ? '港股' : '')}${q && q.at ? ' · 行情 ' + Core.clock(q.at) : ''}`;
+  $('sheetSub').textContent = `${us ? s.code.slice(2) : s.code} · ${s.industry ? tr(s.industry) : (market === 'HK' ? T`港股` : '')}${q && q.at ? T` · 行情 ${Core.clock(q.at)}` : ''}`;
   const body = $('sheetBody');
   const price = q ? q.price : S.price[i];
   const pct = q ? q.pct : S.pct[i];
@@ -1971,28 +1979,28 @@ function renderStockSheet() {
       <div class="${cls(pct)}" style="font:500 13px/18px var(--mono);text-align:right">${Core.signed(q ? q.price - q.prev : null)}<br>${Core.signed(pct)}%</div>
     </div>
     ${q ? `<div class="sec card"><div class="kv">
-      <div><span>今开</span><b>${Core.fixed(q.open)}</b></div><div><span>最高</span><b>${Core.fixed(q.high)}</b></div><div><span>最低</span><b>${Core.fixed(q.low)}</b></div>
-      <div><span>成交额</span><b>${{ HK: 'HK$', US: '$' }[market] || ''}${Core.money(q.amount)}</b></div><div><span>换手率</span><b>${percentText(q.turnover)}</b></div><div><span>量比</span><b>${Core.fixed(q.volRatio)}</b></div>
-      <div><span>市盈率 TTM</span><b>${q.pe > 0 ? Core.fixed(q.pe, 1) : q.pe < 0 ? '亏损' : '—'}</b></div><div><span>市净率</span><b>${Core.fixed(q.pb)}</b></div><div><span>股息率</span><b>${percentText(q.dividend)}</b></div>
-      <div><span>总市值</span><b>${q.capYi ? ({ HK: 'HK$', US: '$' }[market] || '') + Core.money(q.capYi * 1e8) : '—'}</b></div>
-      ${q.limitUp ? `<div><span>涨停价</span><b class="up">${Core.fixed(q.limitUp)}</b></div><div><span>跌停价</span><b class="down">${Core.fixed(q.limitDown)}</b></div>` : ''}
+      <div><span>${T`今开`}</span><b>${Core.fixed(q.open)}</b></div><div><span>${T`最高`}</span><b>${Core.fixed(q.high)}</b></div><div><span>${T`最低`}</span><b>${Core.fixed(q.low)}</b></div>
+      <div><span>${T`成交额`}</span><b>${{ HK: 'HK$', US: '$' }[market] || ''}${Core.money(q.amount)}</b></div><div><span>${T`换手率`}</span><b>${percentText(q.turnover)}</b></div><div><span>${T`量比`}</span><b>${Core.fixed(q.volRatio)}</b></div>
+      <div><span>${T`市盈率 TTM`}</span><b>${q.pe > 0 ? Core.fixed(q.pe, 1) : q.pe < 0 ? T`亏损` : '—'}</b></div><div><span>${T`市净率`}</span><b>${Core.fixed(q.pb)}</b></div><div><span>${T`股息率`}</span><b>${percentText(q.dividend)}</b></div>
+      <div><span>${T`总市值`}</span><b>${q.capYi ? ({ HK: 'HK$', US: '$' }[market] || '') + Core.money(q.capYi * 1e8) : '—'}</b></div>
+      ${q.limitUp ? `<div><span>${T`涨停价`}</span><b class="up">${Core.fixed(q.limitUp)}</b></div><div><span>${T`跌停价`}</span><b class="down">${Core.fixed(q.limitDown)}</b></div>` : ''}
     </div></div>
-    ${us ? '' : `<div class="sec"><h4>五档盘口（${market === 'HK' ? '股' : '手'}）</h4><div class="card book">
-      <div style="color:var(--muted);font-size:10.5px"><span>买盘</span></div><div style="color:var(--muted);font-size:10.5px"><span>卖盘</span></div>
+    ${us ? '' : `<div class="sec"><h4>${market === 'HK' ? T`五档盘口（股）` : T`五档盘口（手）`}</h4><div class="card book">
+      <div style="color:var(--muted);font-size:10.5px"><span>${T`买盘`}</span></div><div style="color:var(--muted);font-size:10.5px"><span>${T`卖盘`}</span></div>
       ${[0, 1, 2, 3, 4].map(k => level(q.bids[k][0], q.bids[k][1], 'var(--up)') + level(q.asks[k][0], q.asks[k][1], 'var(--down)')).join('')}
-    </div></div>`}` : '<div class="sec card small">正在取这只股票的完整报价…</div>'}
-    <div class="sec"><h4>日 K（最近 60 根，前复权，黄线是 20 日均线）</h4><div class="card"><canvas class="chart" id="klineChart" style="height:150px"></canvas><p class="small" id="klineNote" style="display:none"></p></div></div>
-    ${found ? `<div class="sec"><h4>研究结论 · ${esc(found.rule.title)}</h4><div class="card">
-      <div class="stars" style="font-size:14px">${'★'.repeat(found.hit.stars)}${'☆'.repeat(5 - found.hit.stars)} <span class="small">数据符合度</span></div>
+    </div></div>`}` : `<div class="sec card small">${T`正在取这只股票的完整报价…`}</div>`}
+    <div class="sec"><h4>${T`日 K（最近 60 根，前复权，黄线是 20 日均线）`}</h4><div class="card"><canvas class="chart" id="klineChart" style="height:150px"></canvas><p class="small" id="klineNote" style="display:none"></p></div></div>
+    ${found ? `<div class="sec"><h4>${T`研究结论`} · ${esc(found.rule.title)}</h4><div class="card">
+      <div class="stars" style="font-size:14px">${'★'.repeat(found.hit.stars)}${'☆'.repeat(5 - found.hit.stars)} <span class="small">${T`数据符合度`}</span></div>
       <div style="margin-top:6px">${found.hit.checks.map(c => `<div class="check ${c[1] ? '' : 'no'}"><i>${c[1] ? '✓' : '✗'}</i><span>${esc(c[0])}：${esc(c[2])}</span></div>`).join('')}</div>
-      <p class="small" style="margin-top:6px">入选依据只是这些数据符合规则，不预测涨跌。规则依据 ${esc(S.rulesAsOf || '')} 的数据。</p></div></div>` : ''}
-    <div class="sec"><h4>模拟下单（${us ? '美元账户，按最新价估算' : (market === 'HK' ? '港元' : '人民币') + '账户，真实盘口'}，不连券商）</h4><div class="card">
-      <div class="kv"><div><span>可用现金</span><b>${commas(book.cash / 100, 0)}</b></div><div><span>持仓</span><b>${commas(position ? position.qty : 0)}</b></div><div><span>可卖</span><b>${commas(position ? position.avail : 0)}</b></div></div>
+      <p class="small" style="margin-top:6px">${T`入选依据只是这些数据符合规则，不预测涨跌。规则依据 ${esc(S.rulesAsOf || '')} 的数据。`}</p></div></div>` : ''}
+    <div class="sec"><h4>${us ? T`模拟下单（美元账户，按最新价估算，不连券商）` : market === 'HK' ? T`模拟下单（港元账户，真实盘口，不连券商）` : T`模拟下单（人民币账户，真实盘口，不连券商）`}</h4><div class="card">
+      <div class="kv"><div><span>${T`可用现金`}</span><b>${commas(book.cash / 100, 0)}</b></div><div><span>${T`持仓`}</span><b>${commas(position ? position.qty : 0)}</b></div><div><span>${T`可卖`}</span><b>${commas(position ? position.avail : 0)}</b></div></div>
       <div class="ticket"><button class="step" id="qtyMinus">−</button><input id="qty" type="number" inputmode="numeric" value="${st.qty}"><button class="step" id="qtyPlus">＋</button></div>
-      <div class="actions"><button class="buy" id="doBuy">模拟买入</button><button class="sell" id="doSell">模拟卖出</button></div>
-      <div class="actions"><button class="alt" id="basketToggle">${S.basket.includes(s.code) ? '移出篮子' : '加入篮子'}</button><button class="alt" id="basketOpen"${S.basket.length ? '' : ' disabled'}>${S.basket.length ? `看篮子 · ${S.basket.length} 只` : '篮子是空的'}</button></div>
-      <div class="msg ${st.msgKind}" id="tradeMsg">${esc(st.msg || (session ? (us ? '按最新价估算成交。' : '按当前五档盘口逐档成交。') : '现在不在交易时段：委托排队，下一交易时段按真实开盘价成交。'))}</div>
-      <div class="acct-link"><span class="small">${esc(ACCOUNTS.find(a => a.market === market).label)} · 账号 ${Sim.accountId(market, book)}</span><button class="chip" id="stockRecords">${records ? `这只的买卖记录 · ${records} 笔 ›` : '打开模拟账户 ›'}</button></div>
+      <div class="actions"><button class="buy" id="doBuy">${T`模拟买入`}</button><button class="sell" id="doSell">${T`模拟卖出`}</button></div>
+      <div class="actions"><button class="alt" id="basketToggle">${S.basket.includes(s.code) ? T`移出篮子` : T`加入篮子`}</button><button class="alt" id="basketOpen"${S.basket.length ? '' : ' disabled'}>${S.basket.length ? T`看篮子 · ${S.basket.length} 只` : T`篮子是空的`}</button></div>
+      <div class="msg ${st.msgKind}" id="tradeMsg">${esc(st.msg || (session ? (us ? T`按最新价估算成交。` : T`按当前五档盘口逐档成交。`) : T`现在不在交易时段：委托排队，下一交易时段按真实开盘价成交。`))}</div>
+      <div class="acct-link"><span class="small">${esc(ACCOUNTS.find(a => a.market === market).label)} · ${T`账号 ${Sim.accountId(market, book)}`}</span><button class="chip" id="stockRecords">${records ? T`这只的买卖记录 · ${records} 笔 ›` : T`打开模拟账户 ›`}</button></div>
     </div></div>
     <p class="small" style="margin-top:10px">${NOTE}</p>`;
   const qtyInput = $('qty');
@@ -2002,9 +2010,9 @@ function renderStockSheet() {
   $('doBuy').onclick = () => placeOrder('buy');
   $('doSell').onclick = () => placeOrder('sell');
   $('basketToggle').onclick = () => {
-    if (S.basket.includes(s.code)) { dropFromBasket(s.code); st.msg = '已移出篮子'; st.msgKind = ''; }
-    else if (addToBasket([s.code])) { st.msg = '已加入篮子：可以和篮子里的其他股票一起模拟买卖、对照涨跌'; st.msgKind = 'good'; }
-    else { st.msg = `篮子最多放 ${BASKET_MAX} 只`; st.msgKind = 'bad'; }
+    if (S.basket.includes(s.code)) { dropFromBasket(s.code); st.msg = T`已移出篮子`; st.msgKind = ''; }
+    else if (addToBasket([s.code])) { st.msg = T`已加入篮子：可以和篮子里的其他股票一起模拟买卖、对照涨跌`; st.msgKind = 'good'; }
+    else { st.msg = T`篮子最多放 ${BASKET_MAX} 只`; st.msgKind = 'bad'; }
     refreshStockSheet();
   };
   $('basketOpen').onclick = () => openBasket(true);
@@ -2023,7 +2031,7 @@ async function showKline(code) {
     if (!canvas || !S.sheet || S.sheet.kind !== 'stock' || S.stocks[S.sheet.index].code !== code) return;
     const rows = klines.get(code);
     if (rows && rows.length) drawKline(canvas, rows.slice(-60));
-    else if (rows) { canvas.style.display = 'none'; const note = $('klineNote'); note.style.display = ''; note.textContent = '暂时用不了，请稍后再试'; }
+    else if (rows) { canvas.style.display = 'none'; const note = $('klineNote'); note.style.display = ''; note.textContent = T`暂时用不了，请稍后再试`; }
   };
   if (klines.has(code)) { paint(); return; }
   klines.set(code, null);
@@ -2092,22 +2100,22 @@ async function placeOrder(side) {
   // 节假日时钟在交易时段，但报价时间不动：也按休市排队
   const session = q && Core.sessionLive(market, now, q.at);
   let result;
-  if (!q) { st.msg = '暂时用不了，请稍后再试'; st.msgKind = 'bad'; renderStockSheet(); return; }
+  if (!q) { st.msg = T`暂时用不了，请稍后再试`; st.msgKind = 'bad'; renderStockSheet(); return; }
   if (session) {
     result = Sim.placeNow(S.books[market], order, q, now);
     if (result.trade) {
       S.books[market] = result.book;
-      st.msg = `模拟${side === 'buy' ? '买入' : '卖出'} ${commas(result.trade.qty)} 股，均价 ${result.trade.price.toFixed(3)}，费用 ${(result.trade.fee.total / 100).toFixed(2)}${result.unfilled ? (market === 'US' ? `；超过当天成交量的 1%，${commas(result.unfilled)} 股没成交` : `；五档盘口不够，${commas(result.unfilled)} 股没成交`) : ''}`;
+      st.msg = (side === 'buy' ? T`模拟买入 ${commas(result.trade.qty)} 股，均价 ${result.trade.price.toFixed(3)}，费用 ${(result.trade.fee.total / 100).toFixed(2)}` : T`模拟卖出 ${commas(result.trade.qty)} 股，均价 ${result.trade.price.toFixed(3)}，费用 ${(result.trade.fee.total / 100).toFixed(2)}`) + (result.unfilled ? (market === 'US' ? T`；超过当天成交量的 1%，${commas(result.unfilled)} 股没成交` : T`；五档盘口不够，${commas(result.unfilled)} 股没成交`) : '');
       st.msgKind = 'good';
-      feedText(`<span class="name">${esc(s.name)}</span>模拟${side === 'buy' ? '买入' : '卖出'} ${commas(result.trade.qty)} 股 @ ${result.trade.price.toFixed(3)}`);
+      feedText(`<span class="name">${esc(s.name)}</span>${side === 'buy' ? T`模拟买入 ${commas(result.trade.qty)} 股 @ ${result.trade.price.toFixed(3)}` : T`模拟卖出 ${commas(result.trade.qty)} 股 @ ${result.trade.price.toFixed(3)}`}`);
       hitStage('成交'); hitStage('组合'); hitStage('净值');
-    } else { st.msg = result.reject; st.msgKind = 'bad'; }
+    } else { st.msg = trMsg(result.reject); st.msgKind = 'bad'; }
   } else {
     result = Sim.queue(S.books[market], order, q, now);
-    if (result.reject) { st.msg = result.reject; st.msgKind = 'bad'; }
+    if (result.reject) { st.msg = trMsg(result.reject); st.msgKind = 'bad'; }
     else {
       S.books[market] = result.book;
-      st.msg = `已排队：下一交易日按真实开盘价（午休时等下午开市按盘口）模拟${side === 'buy' ? '买入' : '卖出'} ${commas(order.qty)} 股`;
+      st.msg = side === 'buy' ? T`已排队：下一交易日按真实开盘价（午休时等下午开市按盘口）模拟买入 ${commas(order.qty)} 股` : T`已排队：下一交易日按真实开盘价（午休时等下午开市按盘口）模拟卖出 ${commas(order.qty)} 股`;
       st.msgKind = 'good';
     }
   }
@@ -2182,11 +2190,11 @@ function drawBasketBars(canvas, values) {
 function renderBasketSheet() {
   const st = S.sheet;
   const list = S.basket.map(code => [code, S.codeIndex.get(code)]).filter(([, i]) => i !== undefined);
-  $('sheetTitle').textContent = '篮子';
-  $('sheetSub').textContent = list.length ? `${list.length} 只 · 一起模拟买卖，对照看涨跌` : '还没有股票';
+  $('sheetTitle').textContent = T`篮子`;
+  $('sheetSub').textContent = list.length ? T`${list.length} 只 · 一起模拟买卖，对照看涨跌` : T`还没有股票`;
   const body = $('sheetBody');
   if (!list.length) {
-    body.innerHTML = `<div class="sec card small">在个股卡片里点「加入篮子」，或者在「信号」的研究结论里把一整组加进来，就能几只一起模拟买卖、对照看涨跌。</div><p class="small" style="margin-top:12px">${NOTE}</p>`;
+    body.innerHTML = `<div class="sec card small">${T`在个股卡片里点「加入篮子」，或者在「信号」的研究结论里把一整组加进来，就能几只一起模拟买卖、对照看涨跌。`}</div><p class="small" style="margin-top:12px">${NOTE}</p>`;
     return;
   }
   const each = S.basketEach;
@@ -2206,14 +2214,14 @@ function renderBasketSheet() {
     if (result) detail = `<div class="d ${result.bad ? 'bad' : 'good'}">${esc(result.text)}</div>`;
     else if (p && p.qty > 0) {
       const back = heldReturns[heldReturns.length - 1];
-      detail = `<div class="d">持有 ${commas(p.qty)} 股 · 成本 ${Core.fixed(p.cost / p.qty / 100)} · 持有以来 <span class="${cls(back)}">${Core.signed(back, 1)}%</span></div>`;
+      detail = `<div class="d">${T`持有 ${commas(p.qty)} 股 · 成本 ${Core.fixed(p.cost / p.qty / 100)} · 持有以来 <span class="${cls(back)}">${Core.signed(back, 1)}%</span>`}</div>`;
     } else {
       const qty = basketQty(s, q, each);
       const least = q ? Math.ceil(q.price * basketLot(s, q)) : 0;
-      detail = `<div class="d">${q ? (qty ? `按每只 ${unitOf(code)}${commas(each)} 约 ${commas(qty)} 股` : `每只金额不够一手（最少约 ${unitOf(code)}${commas(least)}）`) : '正在取报价…'}</div>`;
+      detail = `<div class="d">${q ? (qty ? T`按每只 ${unitOf(code)}${commas(each)} 约 ${commas(qty)} 股` : T`每只金额不够一手（最少约 ${unitOf(code)}${commas(least)}）`) : T`正在取报价…`}</div>`;
     }
     return `<div class="basket-row"><button class="row" data-stock="${i}"><div class="grow"><div class="t">${esc(s.name)} <span class="small">${esc(MARKET_NAME[s.market])}</span></div>${detail}</div>`
-      + `<div class="n">${Core.fixed(price)}<small class="${cls(pct)}">${Core.signed(pct)}%</small></div></button><button class="drop" data-drop="${esc(code)}" aria-label="移出篮子">×</button></div>`;
+      + `<div class="n">${Core.fixed(price)}<small class="${cls(pct)}">${Core.signed(pct)}%</small></div></button><button class="drop" data-drop="${esc(code)}" aria-label="${T`移出篮子`}">×</button></div>`;
   }).join('');
   const up = today.filter(v => v > 0).length, down = today.filter(v => v < 0).length;
   const avg = today.reduce((a, v) => a + v, 0) / today.length;
@@ -2221,19 +2229,19 @@ function renderBasketSheet() {
   const anyOpen = [...new Set(list.map(([, i]) => S.stocks[i].market))].some(m => Core.sessionOpen(m, Date.now()));
   body.innerHTML = `
     <div class="sec card">
-      <div class="kv"><div><span>今天上涨</span><b class="up">${up} 只</b></div><div><span>今天下跌</span><b class="down">${down} 只</b></div><div><span>平均涨跌</span><b class="${cls(avg)}">${Core.signed(avg)}%</b></div></div>
+      <div class="kv"><div><span>${T`今天上涨`}</span><b class="up">${T`${up} 只`}</b></div><div><span>${T`今天下跌`}</span><b class="down">${T`${down} 只`}</b></div><div><span>${T`平均涨跌`}</span><b class="${cls(avg)}">${Core.signed(avg)}%</b></div></div>
       <canvas class="chart" id="basketToday" style="height:64px;margin-top:8px"></canvas>
-      <p class="small">每根柱是一只股票今天的涨跌，顺序和下面的列表一样。</p>
-      ${heldAvg !== null ? `<div class="kv" style="margin-top:8px"><div><span>已持有</span><b>${heldReturns.length} 只</b></div><div><span>持有以来平均</span><b class="${cls(heldAvg)}">${Core.signed(heldAvg, 1)}%</b></div><div><span>其中赚钱</span><b>${heldReturns.filter(v => v > 0).length} 只</b></div></div>` : ''}
+      <p class="small">${T`每根柱是一只股票今天的涨跌，顺序和下面的列表一样。`}</p>
+      ${heldAvg !== null ? `<div class="kv" style="margin-top:8px"><div><span>${T`已持有`}</span><b>${T`${heldReturns.length} 只`}</b></div><div><span>${T`持有以来平均`}</span><b class="${cls(heldAvg)}">${Core.signed(heldAvg, 1)}%</b></div><div><span>${T`其中赚钱`}</span><b>${T`${heldReturns.filter(v => v > 0).length} 只`}</b></div></div>` : ''}
     </div>
-    <div class="sec"><h4>篮子里的股票（点名字看个股，× 移出）</h4><div class="card">${rows}</div></div>
-    <div class="sec"><h4>一起模拟买卖（分别记在对应市场的模拟账户，不连券商）</h4><div class="card">
-      <div class="ticket"><span class="small" style="flex:none">每只投入</span><input id="basketEach" type="number" inputmode="numeric" value="${each}"><span class="small" style="flex:none">元</span></div>
+    <div class="sec"><h4>${T`篮子里的股票（点名字看个股，× 移出）`}</h4><div class="card">${rows}</div></div>
+    <div class="sec"><h4>${T`一起模拟买卖（分别记在对应市场的模拟账户，不连券商）`}</h4><div class="card">
+      <div class="ticket"><span class="small" style="flex:none">${T`每只投入`}</span><input id="basketEach" type="number" inputmode="numeric" value="${each}"><span class="small" style="flex:none">${T`元`}</span></div>
       <div class="tabs" style="margin-top:6px">${[5000, 10000, 50000, 100000].map(v => `<button data-each="${v}" class="${v === each ? 'on' : ''}">${commas(v)}</button>`).join('')}</div>
-      <p class="small" style="margin-top:4px">港股、美股按各自币种。每只按整手折算，不够一手的跳过；一起模拟卖出时每只卖掉全部可卖的股数。</p>
-      <div class="actions"><button class="buy" id="basketBuy"${st.busy ? ' disabled' : ''}>一起模拟买入</button><button class="sell" id="basketSell"${st.busy ? ' disabled' : ''}>一起模拟卖出</button></div>
-      <div class="msg ${st.busy ? '' : st.msgKind}">${esc(st.busy ? '正在按真实报价逐只模拟成交…' : st.msg || (anyOpen ? '交易时段按当前盘口逐只成交；休市的市场排队到下一交易时段。' : '现在不在交易时段：委托排队，下一交易时段按真实开盘价成交。'))}</div>
-      <div class="acct-link"><button class="chip" id="basketRecords">${st.msg && !st.busy ? '看这次的委托和成交 ›' : '模拟账户 ›'}</button><button class="chip" id="basketClear">清空篮子</button></div>
+      <p class="small" style="margin-top:4px">${T`港股、美股按各自币种。每只按整手折算，不够一手的跳过；一起模拟卖出时每只卖掉全部可卖的股数。`}</p>
+      <div class="actions"><button class="buy" id="basketBuy"${st.busy ? ' disabled' : ''}>${T`一起模拟买入`}</button><button class="sell" id="basketSell"${st.busy ? ' disabled' : ''}>${T`一起模拟卖出`}</button></div>
+      <div class="msg ${st.busy ? '' : st.msgKind}">${esc(st.busy ? T`正在按真实报价逐只模拟成交…` : st.msg || (anyOpen ? T`交易时段按当前盘口逐只成交；休市的市场排队到下一交易时段。` :T`现在不在交易时段：委托排队，下一交易时段按真实开盘价成交。`))}</div>
+      <div class="acct-link"><button class="chip" id="basketRecords">${st.msg && !st.busy ? T`看这次的委托和成交 ›` : T`模拟账户 ›`}</button><button class="chip" id="basketClear">${T`清空篮子`}</button></div>
     </div></div>
     <p class="small" style="margin-top:12px">${NOTE}</p>`;
   drawBasketBars($('basketToday'), today);
@@ -2275,17 +2283,17 @@ async function placeBasket(side) {
   const fresh = {};
   for (let k = 0; k < list.length; k += BATCH) Object.assign(fresh, await fetchFull(list.slice(k, k + BATCH), 1));
   const now = Date.now();
-  const word = side === 'buy' ? '买入' : '卖出';
+  const buying = side === 'buy';
   let done = 0, queued = 0, skipped = 0;
   for (const code of list) {
     const s = S.stocks[S.codeIndex.get(code)], market = s.market;
     const q = fresh[code] || S.full.get(code);
-    if (!q) { st.results[code] = { bad: true, text: '暂时取不到报价，没有下单' }; skipped++; continue; }
+    if (!q) { st.results[code] = { bad: true, text: T`暂时取不到报价，没有下单` }; skipped++; continue; }
     const position = S.books[market].positions[code];
     const qty = side === 'buy' ? basketQty(s, q, S.basketEach) : position ? position.avail : 0;
     if (!(qty > 0)) {
       const least = Math.ceil(q.price * basketLot(s, q));
-      st.results[code] = { bad: true, text: side === 'buy' ? `每只金额不够一手（最少约 ${unitOf(code)}${commas(least)}），跳过` : position && position.qty > 0 ? 'T+1：今天模拟买入的要下一个交易日才能卖' : '没有持仓，跳过' };
+      st.results[code] = { bad: true, text: side === 'buy' ? T`每只金额不够一手（最少约 ${unitOf(code)}${commas(least)}），跳过` : position && position.qty > 0 ? T`T+1：今天模拟买入的要下一个交易日才能卖` : T`没有持仓，跳过` };
       skipped++;
       continue;
     }
@@ -2296,19 +2304,19 @@ async function placeBasket(side) {
       if (r.trade) {
         S.books[market] = r.book;
         done++;
-        st.results[code] = { text: `模拟${word} ${commas(r.trade.qty)} 股 @ ${r.trade.price.toFixed(3)}${r.unfilled ? `，${commas(r.unfilled)} 股没成交` : ''}` };
-        feedText(`<span class="name">${esc(s.name)}</span>模拟${word} ${commas(r.trade.qty)} 股 @ ${r.trade.price.toFixed(3)}`);
-      } else { st.results[code] = { bad: true, text: r.reject }; skipped++; }
+        st.results[code] = { text: (buying ? T`模拟买入 ${commas(r.trade.qty)} 股 @ ${r.trade.price.toFixed(3)}` : T`模拟卖出 ${commas(r.trade.qty)} 股 @ ${r.trade.price.toFixed(3)}`) + (r.unfilled ? T`，${commas(r.unfilled)} 股没成交` : '') };
+        feedText(`<span class="name">${esc(s.name)}</span>${buying ? T`模拟买入 ${commas(r.trade.qty)} 股 @ ${r.trade.price.toFixed(3)}` : T`模拟卖出 ${commas(r.trade.qty)} 股 @ ${r.trade.price.toFixed(3)}`}`);
+      } else { st.results[code] = { bad: true, text: trMsg(r.reject) }; skipped++; }
     } else {
       const r = Sim.queue(S.books[market], order, q, now);
-      if (r.reject) { st.results[code] = { bad: true, text: r.reject }; skipped++; }
-      else { S.books[market] = r.book; queued++; st.results[code] = { text: `已排队：下一交易时段按真实开盘价模拟${word} ${commas(qty)} 股` }; }
+      if (r.reject) { st.results[code] = { bad: true, text: trMsg(r.reject) }; skipped++; }
+      else { S.books[market] = r.book; queued++; st.results[code] = { text: buying ? T`已排队：下一交易时段按真实开盘价模拟买入 ${commas(qty)} 股` : T`已排队：下一交易时段按真实开盘价模拟卖出 ${commas(qty)} 股` }; }
     }
   }
   saveBooks();
   if (done) { hitStage('成交'); hitStage('组合'); hitStage('净值'); }
   st.busy = false;
-  st.msg = `成交 ${done} 只${queued ? `，排队 ${queued} 只` : ''}${skipped ? `，${skipped} 只没有下单（原因见每一行）` : ''}`;
+  st.msg = T`成交 ${done} 只` + (queued ? T`，排队 ${queued} 只` : '') + (skipped ? T`，${skipped} 只没有下单（原因见每一行）` : '');
   st.msgKind = done || queued ? 'good' : 'bad';
   if (S.sheet === st) renderBasketSheet();
   refreshAccount();
@@ -2317,12 +2325,12 @@ async function placeBasket(side) {
 
 // ---------------------------------------------------------------- 模拟账户：账号、持仓、买卖记录、委托、个股盈亏、每日对账 / Simulated account: number, positions, trades, orders, per-stock P&L, daily statement
 
-const ACCOUNT_TABS = [['hold', '持仓'], ['trades', '买卖记录'], ['orders', '委托'], ['stocks', '个股盈亏'], ['days', '每日']];
-const SIDE_WORD = { buy: '模拟买入', sell: '模拟卖出' };
-const ORDER_STATUS = { filled: ['已成交', 'good'], partial: ['部分成交', 'good'], queued: ['排队中', 'wait'], rejected: ['未成交', 'bad'], cancelled: ['已撤单', 'off'] };
-const RANGES = [['all', '全部'], ['today', '今天'], ['7', '近 7 天'], ['30', '近 30 天'], ['custom', '按日期']];
-const MONEY_WORD = { CN: '元', HK: '港元', US: '美元' };
-const accountName = (market, book) => `账号 ${Sim.accountId(market, book)}`;
+const ACCOUNT_TABS = [['hold', T`持仓`], ['trades', T`买卖记录`], ['orders', T`委托`], ['stocks', T`个股盈亏`], ['days', T`每日`]];
+const SIDE_WORD = { buy: T`模拟买入`, sell: T`模拟卖出` };
+const ORDER_STATUS = { filled: [T`已成交`, 'good'], partial: [T`部分成交`, 'good'], queued: [T`排队中`, 'wait'], rejected: [T`未成交`, 'bad'], cancelled: [T`已撤单`, 'off'] };
+const RANGES = [['all', T`全部`], ['today', T`今天`], ['7', T`近 7 天`], ['30', T`近 30 天`], ['custom', T`按日期`]];
+const MONEY_WORD = { CN: T`元`, HK: T`港元`, US: T`美元` };
+const accountName = (market, book) => T`账号 ${Sim.accountId(market, book)}`;
 const WEEKDAY = '日一二三四五六';
 const PAGE = 60;
 const plainCode = code => code.replace(/^(sh|sz|bj|hk|us)/, '');
@@ -2333,13 +2341,13 @@ const cents = (v, d = 2) => commas(v / 100, d);
  */
 const signedCents = (v, d = 2) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '-' : '') + commas(Math.abs(v) / 100, d));
 const bjDay = at => Core.beijing(at).day;
-const dayTitle = day => `${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日 周${WEEKDAY[new Date(day + 'T00:00:00Z').getUTCDay()]}`;
+const dayTitle = day => T`${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日 ${tr('周' + WEEKDAY[new Date(day + 'T00:00:00Z').getUTCDay()])}`;
 /**
  * 北京时间；美股过了北京午夜的，前面带上北京日期，免得和交易日对不上。
  * Beijing time; US trades past Beijing midnight get the Beijing date in front so they line up with the trading day.
  */
 const timeOf = (code, at) => { const day = bjDay(at); return (day === Core.marketDay(Core.marketOf(code), at) ? '' : day.slice(5) + ' ') + Core.clock(at); };
-const sideTag = side => `<b class="tag ${side}">${side === 'buy' ? '买' : '卖'}</b>`;
+const sideTag = side => `<b class="tag ${side}">${side === 'buy' ? T`买` : T`卖`}</b>`;
 
 /**
  * 正在看的账本：现在的账户，或者存档里的一本（只读，持仓按重置那一刻的价格）。
@@ -2390,11 +2398,11 @@ function renderAccountSheet() {
   if (!v.book) { st.archive = null; renderAccountSheet(); return; }
   const { book, market, archived } = v;
   const account = ACCOUNTS.find(a => a.market === market);
-  $('sheetTitle').textContent = archived ? '以前的模拟账户' : '模拟账户';
+  $('sheetTitle').textContent = archived ? T`以前的模拟账户` : T`模拟账户`;
   $('sheetSub').textContent = archived
-    ? `${accountName(market, book)} · ${book.openedAt ? bjDay(book.openedAt) : '—'} 至 ${bjDay(book.closedAt)} · 只读`
-    : `${account.label} · ${accountName(market, book)} · ${book.openedAt ? bjDay(book.openedAt) + ' 开户' : '开户时间没有记录'}`;
-  const archivedNote = '这是重置前存下的账户，记录只能看，不能再下单。';
+    ? T`${accountName(market, book)} · ${book.openedAt ? bjDay(book.openedAt) : '—'} 至 ${bjDay(book.closedAt)} · 只读`
+    : `${account.label} · ${accountName(market, book)} · ${book.openedAt ? T`${bjDay(book.openedAt)} 开户` : T`开户时间没有记录`}`;
+  const archivedNote = T`这是重置前存下的账户，记录只能看，不能再下单。`;
   const counts = {
     hold: Object.values(book.positions).filter(p => p.qty > 0).length + (archived ? 0 : book.pending.length),
     trades: book.trades.length, orders: (book.orders || []).length, stocks: Sim.stockSummary(book, v.quotes).length, days: 0,
@@ -2402,13 +2410,13 @@ function renderAccountSheet() {
   const body = $('sheetBody');
   body.innerHTML = `
     ${archived
-      ? `<div class="sec card acct-link" style="margin-top:2px"><span class="small">${archivedNote}</span><button class="chip" id="acctNow">现在的账户 ›</button></div>`
+      ? `<div class="sec card acct-link" style="margin-top:2px"><span class="small">${archivedNote}</span><button class="chip" id="acctNow">${T`现在的账户 ›`}</button></div>`
       : `<div class="tabs" id="acctMarkets">${ACCOUNTS.map(a => `<button data-market="${a.market}" class="${a.market === market ? 'on' : ''}">${a.label}</button>`).join('')}</div>`}
     ${accountSummary(v)}
     <div class="tabs acct-tabs" id="acctTabs">${ACCOUNT_TABS.map(([id, name]) => `<button data-tab="${id}" class="${id === st.tab ? 'on' : ''}">${name}${counts[id] ? ' ' + commas(counts[id]) : ''}</button>`).join('')}</div>
     <div id="acctPane">${accountPane(st, v)}</div>
     ${archived ? '' : archiveList(market)}
-    <p class="small" style="margin-top:12px">模拟账户只存在这个浏览器里，不连券商，不涉及真实资金。${NOTE}</p>`;
+    <p class="small" style="margin-top:12px">${T`模拟账户只存在这个浏览器里，不连券商，不涉及真实资金。${NOTE}`}</p>`;
   bindAccount(st, body);
   if (st.tab === 'days') drawAccountCurve(v);
 }
@@ -2428,24 +2436,24 @@ function accountSummary(v) {
   const { book, market, archived } = v;
   const realized = Object.values(book.positions).reduce((a, p) => a + (p.realized || 0), 0);
   const feesPaid = Object.values(book.positions).reduce((a, p) => a + (p.fees || 0), 0);
-  const word = `<p class="small" style="margin-top:6px">金额单位：${MONEY_WORD[market]}。盈亏都扣过佣金、印花税等费用。</p>`;
+  const word = `<p class="small" style="margin-top:6px">${T`金额单位：${MONEY_WORD[market]}。盈亏都扣过佣金、印花税等费用。`}</p>`;
   if (archived) {
     const pnl = book.final - book.capital;
     return `<div class="sec card"><div class="kv">
-      <div><span>结束时总资产</span><b>${cents(book.final)}</b></div><div><span>累计盈亏</span><b class="${cls(pnl)}">${signedCents(pnl)}</b></div><div><span>收益率</span><b class="${cls(pnl)}">${Core.signed(pnl / book.capital * 100)}%</b></div>
-      <div><span>本金</span><b>${cents(book.capital, 0)}</b></div><div><span>已实现盈亏</span><b class="${cls(realized)}">${signedCents(realized)}</b></div><div><span>累计费用</span><b>${cents(feesPaid)}</b></div></div>${word}</div>`;
+      <div><span>${T`结束时总资产`}</span><b>${cents(book.final)}</b></div><div><span>${T`累计盈亏`}</span><b class="${cls(pnl)}">${signedCents(pnl)}</b></div><div><span>${T`收益率`}</span><b class="${cls(pnl)}">${Core.signed(pnl / book.capital * 100)}%</b></div>
+      <div><span>${T`本金`}</span><b>${cents(book.capital, 0)}</b></div><div><span>${T`已实现盈亏`}</span><b class="${cls(realized)}">${signedCents(realized)}</b></div><div><span>${T`累计费用`}</span><b>${cents(feesPaid)}</b></div></div>${word}</div>`;
   }
   const e = Sim.equity(book, v.quotes);
   return `<div class="sec card"><div class="kv">
-    <div><span>总资产</span><b>${cents(e.total)}</b></div><div><span>持仓市值</span><b>${cents(e.market)}</b></div><div><span>可用现金</span><b>${cents(e.cash)}</b></div>
-    <div><span>今日盈亏</span><b class="${cls(e.dayPnl)}">${signedCents(e.dayPnl)}</b></div><div><span>累计盈亏</span><b class="${cls(e.pnl)}">${signedCents(e.pnl)}</b></div><div><span>收益率</span><b class="${cls(e.pnl)}">${Core.signed(e.pnl / book.capital * 100)}%</b></div>
-    <div><span>本金</span><b>${cents(book.capital, 0)}</b></div><div><span>已实现盈亏</span><b class="${cls(realized)}">${signedCents(realized)}</b></div><div><span>累计费用</span><b>${cents(feesPaid)}</b></div></div>
-    ${e.missing.length ? `<p class="small" style="margin-top:6px">${e.missing.length} 只持仓还没取到报价，先按成本估。</p>` : ''}${word}</div>`;
+    <div><span>${T`总资产`}</span><b>${cents(e.total)}</b></div><div><span>${T`持仓市值`}</span><b>${cents(e.market)}</b></div><div><span>${T`可用现金`}</span><b>${cents(e.cash)}</b></div>
+    <div><span>${T`今日盈亏`}</span><b class="${cls(e.dayPnl)}">${signedCents(e.dayPnl)}</b></div><div><span>${T`累计盈亏`}</span><b class="${cls(e.pnl)}">${signedCents(e.pnl)}</b></div><div><span>${T`收益率`}</span><b class="${cls(e.pnl)}">${Core.signed(e.pnl / book.capital * 100)}%</b></div>
+    <div><span>${T`本金`}</span><b>${cents(book.capital, 0)}</b></div><div><span>${T`已实现盈亏`}</span><b class="${cls(realized)}">${signedCents(realized)}</b></div><div><span>${T`累计费用`}</span><b>${cents(feesPaid)}</b></div></div>
+    ${e.missing.length ? `<p class="small" style="margin-top:6px">${T`${e.missing.length} 只持仓还没取到报价，先按成本估。`}</p>` : ''}${word}</div>`;
 }
 
 function accountPane(st, v) {
-  if (st.tab === 'trades') return filterBar(st, v, '搜股票名称或代码，看它的每一笔买卖') + `<div id="acctResults">${tradeResults(st, v)}</div>` + rulesNote(st);
-  if (st.tab === 'orders') return filterBar(st, v, '搜股票名称或代码') + `<div id="acctResults">${orderResults(st, v)}</div>`;
+  if (st.tab === 'trades') return filterBar(st, v, T`搜股票名称或代码，看它的每一笔买卖`) + `<div id="acctResults">${tradeResults(st, v)}</div>` + rulesNote(st);
+  if (st.tab === 'orders') return filterBar(st, v, T`搜股票名称或代码`) + `<div id="acctResults">${orderResults(st, v)}</div>`;
   if (st.tab === 'stocks') return stocksPane(v);
   if (st.tab === 'days') return daysPane(v);
   return holdPane(st, v);
@@ -2459,21 +2467,21 @@ function holdPane(st, v) {
     const pnl = value - p.cost;
     const i = S.codeIndex.get(code);
     return `<button class="row"${i !== undefined ? ` data-stock="${i}"` : ''}><div class="grow"><div class="t">${esc(p.name)} <span class="code">${esc(plainCode(code))}</span></div>
-      <div class="d">${commas(p.qty)} 股${archived ? '' : ` · 可卖 ${commas(p.avail)}`} · 成本 ${Core.fixed(p.cost / p.qty / 100, 3)}${q ? ` · ${archived ? '重置时' : '现价'} ${Core.fixed(q.price, 3)}` : ' · 还没取到报价，按成本估'}</div></div>
+      <div class="d">${T`${commas(p.qty)} 股`}${archived ? '' : ` · ${T`可卖 ${commas(p.avail)}`}`} · ${T`成本 ${Core.fixed(p.cost / p.qty / 100, 3)}`}${q ? ` · ${archived ? T`重置时 ${Core.fixed(q.price, 3)}` : T`现价 ${Core.fixed(q.price, 3)}`}` : ` · ${T`还没取到报价，按成本估`}`}</div></div>
       <div class="n">${cents(value)}<small class="${cls(pnl)}">${signedCents(pnl)} · ${Core.signed(pnl / p.cost * 100, 1)}%</small></div></button>`;
   }).join('');
-  const pending = archived ? '' : book.pending.map((o, k) => `<div class="row"><div class="grow"><div class="t">${sideTag(o.side)}${esc(o.name)} · 排队中</div><div class="d">${SIDE_WORD[o.side]} ${commas(o.qty)} 股，等下一交易时段按真实价格成交</div></div><button class="chip" data-cancel="${k}">撤单</button></div>`).join('');
-  const empty = archived ? '重置时没有持仓。' : '现在没有持仓。点星云里的股票，或者在「信号」里选一只，用真实盘口模拟买入。';
+  const pending = archived ? '' : book.pending.map((o, k) => `<div class="row"><div class="grow"><div class="t">${sideTag(o.side)}${esc(o.name)} · ${T`排队中`}</div><div class="d">${o.side === 'buy' ? T`模拟买入 ${commas(o.qty)} 股，等下一交易时段按真实价格成交` : T`模拟卖出 ${commas(o.qty)} 股，等下一交易时段按真实价格成交`}</div></div><button class="chip" data-cancel="${k}">${T`撤单`}</button></div>`).join('');
+  const empty = archived ? T`重置时没有持仓。` : T`现在没有持仓。点星云里的股票，或者在「信号」里选一只，用真实盘口模拟买入。`;
   return `<div class="sec card">${rows || pending ? rows + pending : `<p class="small">${empty}</p>`}</div>${archived ? '' : resetBlock(st, v)}`;
 }
 
 function resetBlock(st, v) {
   const { book, market } = v;
   const unit = ACCOUNTS.find(a => a.market === market).unit;
-  if (!st.reset) return `<div class="acct-link"><span class="small">重置会换一个新账号，现在的持仓和买卖记录存进「以前的账户」，以后还能查。</span><button class="chip" id="acctReset">重置账户</button></div>`;
+  if (!st.reset) return `<div class="acct-link"><span class="small">${T`重置会换一个新账号，现在的持仓和买卖记录存进「以前的账户」，以后还能查。`}</span><button class="chip" id="acctReset">${T`重置账户`}</button></div>`;
   const next = Sim.accountId(market, { no: (book.no || 1) + 1 });
-  return `<div class="sec card"><p class="small">选新账户的本金。${Sim.used(book) ? `现在的账号 ${Sim.accountId(market, book)} 存进「以前的账户」：持仓按现价记下，买卖记录、委托都还能查。新账号是 ${next}。` : '这个账户还没用过，只换本金，账号不变。'}</p>
-    <div class="tabs" style="margin-top:6px">${[10000, 100000, 1000000].map(x => `<button data-capital="${x}">${unit}${commas(x)}</button>`).join('')}<button data-capital="">取消</button></div></div>`;
+  return `<div class="sec card"><p class="small">${Sim.used(book) ? T`选新账户的本金。现在的账号 ${Sim.accountId(market, book)} 存进「以前的账户」：持仓按现价记下，买卖记录、委托都还能查。新账号是 ${next}。` : T`选新账户的本金。这个账户还没用过，只换本金，账号不变。`}</p>
+    <div class="tabs" style="margin-top:6px">${[10000, 100000, 1000000].map(x => `<button data-capital="${x}">${unit}${commas(x)}</button>`).join('')}<button data-capital="">${T`取消`}</button></div></div>`;
 }
 
 /**
@@ -2481,12 +2489,12 @@ function resetBlock(st, v) {
  * Shared filters for trades and orders: search, side, time.
  */
 function filterBar(st, v, hint) {
-  const statuses = [['all', '全部'], ['queued', '排队中'], ['filled', '已成交'], ['failed', '未成交 / 撤单']];
+  const statuses = [['all', T`全部`], ['queued', T`排队中`], ['filled', T`已成交`], ['failed', T`未成交 / 撤单`]];
   return `<div class="sec filters">
     <input class="search" id="acctQ" placeholder="${esc(hint)}" autocomplete="off" value="${esc(st.text)}">
-    <div class="tabs">${[['all', '全部'], ['buy', '模拟买入'], ['sell', '模拟卖出']].map(([id, name]) => `<button data-side="${id}" class="${st.side === id ? 'on' : ''}">${name}</button>`).join('')}</div>
+    <div class="tabs">${[['all', T`全部`], ['buy', T`模拟买入`], ['sell', T`模拟卖出`]].map(([id, name]) => `<button data-side="${id}" class="${st.side === id ? 'on' : ''}">${name}</button>`).join('')}</div>
     <div class="tabs">${RANGES.map(([id, name]) => `<button data-range="${id}" class="${st.range === id ? 'on' : ''}">${name}</button>`).join('')}</div>
-    ${st.range === 'custom' ? `<div class="dates"><input type="date" id="acctFrom" value="${esc(st.from)}"><span>至</span><input type="date" id="acctTo" value="${esc(st.to)}"></div>` : ''}
+    ${st.range === 'custom' ? `<div class="dates"><input type="date" id="acctFrom" value="${esc(st.from)}"><span>${T`至`}</span><input type="date" id="acctTo" value="${esc(st.to)}"></div>` : ''}
     ${st.tab === 'orders' ? `<div class="tabs">${statuses.map(([id, name]) => `<button data-status="${id}" class="${st.status === id ? 'on' : ''}">${name}</button>`).join('')}</div>` : ''}
   </div>`;
 }
@@ -2501,7 +2509,7 @@ function groupedRows(items, dayOf, row, limit) {
   let html = '', last = '';
   for (const x of items.slice(0, limit)) {
     const d = dayOf(x);
-    if (d !== last) { html += `<div class="day-head"><span>${d ? dayTitle(d) : '日期没有记录'}</span><span>${perDay[d]} 笔</span></div>`; last = d; }
+    if (d !== last) { html += `<div class="day-head"><span>${d ? dayTitle(d) : T`日期没有记录`}</span><span>${T`${perDay[d]} 笔`}</span></div>`; last = d; }
     html += row(x);
   }
   return html;
@@ -2516,30 +2524,30 @@ function tradeResults(st, v) {
   // 搜的股票在别的币种账户里也有记录：给个入口
   const others = st.text.trim() && !v.archived
     ? MARKETS.filter(m => m !== market).map(m => [m, Sim.filterTrades(S.books[m].trades, { text: st.text }).length]).filter(([, n]) => n) : [];
-  const hint = others.length ? `<div class="acct-link">${others.map(([m, n]) => `<button class="chip" data-switch="${m}">${ACCOUNTS.find(a => a.market === m).label}有 ${n} 笔 ›</button>`).join('')}</div>` : '';
+  const hint = others.length ? `<div class="acct-link">${others.map(([m, n]) => `<button class="chip" data-switch="${m}">${T`${ACCOUNTS.find(a => a.market === m).label}有 ${n} 笔 ›`}</button>`).join('')}</div>` : '';
   if (!hits.length) {
-    return `<div class="sec card small">${book.trades.length ? '没有符合条件的买卖记录。' : v.archived ? '这个账户没有成交过。' : '还没有成交。模拟买入或模拟卖出成交后，每一笔都记在这里：时间、股数、价格、费用和模拟卖出的盈亏。'}</div>${hint}`;
+    return `<div class="sec card small">${book.trades.length ? T`没有符合条件的买卖记录。` : v.archived ? T`这个账户没有成交过。` : T`还没有成交。模拟买入或模拟卖出成交后，每一笔都记在这里：时间、股数、价格、费用和模拟卖出的盈亏。`}</div>${hint}`;
   }
   const row = t => {
     const gain = t.side === 'sell'
-      ? `<small class="${t.realized === null || t.realized === undefined ? 'flat' : cls(t.realized)}">盈亏 ${t.realized === null || t.realized === undefined ? '—' : signedCents(t.realized)}</small>`
+      ? `<small class="${t.realized === null || t.realized === undefined ? 'flat' : cls(t.realized)}">${T`盈亏 ${t.realized === null || t.realized === undefined ? '—' : signedCents(t.realized)}`}</small>`
       : `<small class="flat">&nbsp;</small>`;
     // 排队的委托按开盘价成交：时间写“开盘价”，记账时间在明细里
     return `<button class="row" data-trade="${t.no || 0}" data-at="${t.at}"><div class="grow"><div class="t">${sideTag(t.side)}${esc(t.name)} <span class="code">${esc(plainCode(t.code))}</span></div>
-      <div class="d">${t.basis === 'open' ? '开盘价' : timeOf(t.code, t.at)} · ${commas(t.qty)} 股 @ ${Core.fixed(t.price, 3)} · 费用 ${cents(t.fee ? t.fee.total : 0)}</div></div>
+      <div class="d">${t.basis === 'open' ? T`开盘价` : timeOf(t.code, t.at)} · ${T`${commas(t.qty)} 股 @ ${Core.fixed(t.price, 3)}`} · ${T`费用 ${cents(t.fee ? t.fee.total : 0)}`}</div></div>
       <div class="n">${cents(t.amount)}${gain}</div></button>`;
   };
   const parts = [
-    sum.buys ? `模拟买入 ${sum.buys} 笔共 ${cents(sum.buyAmt)}` : '',
-    sum.sells ? `模拟卖出 ${sum.sells} 笔共 ${cents(sum.sellAmt)}` : '',
-    `费用 ${cents(sum.fees)}`,
-    sum.sells ? `模拟卖出盈亏 <b class="${cls(sum.realized)}">${signedCents(sum.realized)}</b>${sum.realizedKnown ? '' : '（早期记录不全，只算了能算的）'}` : '',
-  ].filter(Boolean).join('，');
-  return `<div class="sec card small sum">${filtered ? '符合条件的' : '全部'} ${commas(sum.n)} 笔：${parts}。</div>
+    sum.buys ? T`模拟买入 ${sum.buys} 笔共 ${cents(sum.buyAmt)}` : '',
+    sum.sells ? T`模拟卖出 ${sum.sells} 笔共 ${cents(sum.sellAmt)}` : '',
+    T`费用 ${cents(sum.fees)}`,
+    sum.sells ? (sum.realizedKnown ? T`模拟卖出盈亏 <b class="${cls(sum.realized)}">${signedCents(sum.realized)}</b>` : T`模拟卖出盈亏 <b class="${cls(sum.realized)}">${signedCents(sum.realized)}</b>（早期记录不全，只算了能算的）`) : '',
+  ].filter(Boolean).join(T`，`);
+  return `<div class="sec card small sum">${filtered ? T`符合条件的 ${commas(sum.n)} 笔：${parts}。` : T`全部 ${commas(sum.n)} 笔：${parts}。`}</div>
     ${hint}
     <div class="sec card">${groupedRows(hits, t => Core.marketDay(market, t.at), row, st.limit)}</div>
-    ${hits.length > st.limit ? `<button class="more" id="acctMore">再显示 ${Math.min(PAGE, hits.length - st.limit)} 笔（还有 ${commas(hits.length - st.limit)} 笔）</button>` : ''}
-    <p class="small" style="margin-top:6px">点一笔看明细。时间是北京时间。</p>`;
+    ${hits.length > st.limit ? `<button class="more" id="acctMore">${T`再显示 ${Math.min(PAGE, hits.length - st.limit)} 笔（还有 ${commas(hits.length - st.limit)} 笔）`}</button>` : ''}
+    <p class="small" style="margin-top:6px">${T`点一笔看明细。时间是北京时间。`}</p>`;
 }
 
 function orderResults(st, v) {
@@ -2558,37 +2566,37 @@ function orderResults(st, v) {
     return true;
   }).slice().reverse();
   if (!list.length) {
-    return `<div class="sec card small">${(book.orders || []).length ? '没有符合条件的委托。' : '还没有委托。'}股数不合规、可卖不够这类当场就提示的，不算委托，不记在这里。</div>`;
+    return `<div class="sec card small">${(book.orders || []).length ? T`没有符合条件的委托。股数不合规、可卖不够这类当场就提示的，不算委托，不记在这里。` : T`还没有委托。股数不合规、可卖不够这类当场就提示的，不算委托，不记在这里。`}</div>`;
   }
   const row = o => {
     const [label, kind] = ORDER_STATUS[o.status] || [o.status, ''];
     const detail = o.status === 'filled' || o.status === 'partial'
-      ? `成交 ${commas(o.filled)} 股 @ ${Core.fixed(o.price, 3)}${o.via === 'queue' ? '（排队后成交）' : ''}${o.reason ? '，' + esc(o.reason) : ''}`
-      : o.status === 'queued' ? '等下一交易时段按真实价格成交'
-        : o.status === 'cancelled' ? `撤单${o.done ? '于 ' + timeOf(o.code, o.done) : ''}`
-          : esc(o.reason || '没有成交');
+      ? `${T`成交 ${commas(o.filled)} 股 @ ${Core.fixed(o.price, 3)}`}${o.via === 'queue' ? T`（排队后成交）` : ''}${o.reason ? T`，` + esc(trMsg(o.reason)) : ''}`
+      : o.status === 'queued' ? T`等下一交易时段按真实价格成交`
+        : o.status === 'cancelled' ? (o.done ? T`撤单于 ${timeOf(o.code, o.done)}` : T`撤单${''}`)
+          : esc(o.reason ? trMsg(o.reason) : T`没有成交`);
     const k = o.status === 'queued' && !archived ? book.pending.findIndex(p => p.no === o.no) : -1;
-    return `<div class="row"><div class="grow"><div class="t">${sideTag(o.side)}${esc(o.name)} <span class="code">${esc(plainCode(o.code))}</span> · ${commas(o.qty)} 股</div>
+    return `<div class="row"><div class="grow"><div class="t">${sideTag(o.side)}${esc(o.name)} <span class="code">${esc(plainCode(o.code))}</span> · ${T`${commas(o.qty)} 股`}</div>
       <div class="d">${o.at ? timeOf(o.code, o.at) : '—'} · ${detail}</div></div>
-      ${k >= 0 ? `<button class="chip" data-cancel="${k}">撤单</button>` : `<span class="badge ${kind}">${label}</span>`}</div>`;
+      ${k >= 0 ? `<button class="chip" data-cancel="${k}">${T`撤单`}</button>` : `<span class="badge ${kind}">${label}</span>`}</div>`;
   };
   const n = s => list.filter(o => s.includes(o.status)).length;
-  return `<div class="sec card small sum">${commas(list.length)} 笔委托：已成交 ${n(['filled', 'partial'])}，排队中 ${n(['queued'])}，未成交 ${n(['rejected'])}，已撤单 ${n(['cancelled'])}。</div>
+  return `<div class="sec card small sum">${T`${commas(list.length)} 笔委托：已成交 ${n(['filled', 'partial'])}，排队中 ${n(['queued'])}，未成交 ${n(['rejected'])}，已撤单 ${n(['cancelled'])}。`}</div>
     <div class="sec card">${groupedRows(list, o => (o.at ? Core.marketDay(market, o.at) : ''), row, st.limit)}</div>
-    ${list.length > st.limit ? `<button class="more" id="acctMore">再显示 ${Math.min(PAGE, list.length - st.limit)} 笔（还有 ${commas(list.length - st.limit)} 笔）</button>` : ''}
-    <p class="small" style="margin-top:6px">股数不合规、可卖不够这类当场就提示的，不算委托，不记在这里。</p>`;
+    ${list.length > st.limit ? `<button class="more" id="acctMore">${T`再显示 ${Math.min(PAGE, list.length - st.limit)} 笔（还有 ${commas(list.length - st.limit)} 笔）`}</button>` : ''}
+    <p class="small" style="margin-top:6px">${T`股数不合规、可卖不够这类当场就提示的，不算委托，不记在这里。`}</p>`;
 }
 
 function stocksPane(v) {
   const rows = Sim.stockSummary(v.book, v.quotes);
-  if (!rows.length) return `<div class="sec card small">${v.archived ? '这个账户没有买卖过股票。' : '还没有买卖过股票。'}</div>`;
+  if (!rows.length) return `<div class="sec card small">${v.archived ? T`这个账户没有买卖过股票。` : T`还没有买卖过股票。`}</div>`;
   const total = rows.reduce((a, r) => a + r.total, 0);
   const win = rows.filter(r => r.total > 0).length, lose = rows.filter(r => r.total < 0).length;
-  return `<div class="sec card"><div class="kv"><div><span>做过</span><b>${rows.length} 只</b></div><div><span>赚钱 / 亏钱</span><b><em class="up">${win}</em> / <em class="down">${lose}</em></b></div><div><span>合计盈亏</span><b class="${cls(total)}">${signedCents(total)}</b></div></div>
-    <p class="small" style="margin-top:6px">持有中的按${v.archived ? '重置时的价格' : '现价'}算浮动盈亏，卖掉的部分算已实现盈亏，都扣过费用。点一只看它的每一笔买卖。</p></div>
-    <div class="sec card">${rows.map(r => `<button class="row" data-records="${esc(plainCode(r.code))}"><div class="grow"><div class="t">${esc(r.name)} <span class="code">${esc(plainCode(r.code))}</span> <span class="badge ${r.qty > 0 ? 'good' : 'off'}">${r.qty > 0 ? `持有 ${commas(r.qty)} 股` : '已清仓'}</span></div>
-      <div class="d">买 ${commas(r.bought)} 股 ${cents(r.boughtAmt, 0)} · 卖 ${commas(r.sold)} 股 ${cents(r.soldAmt, 0)} · 费 ${cents(r.fees)}${r.partial ? ' · 早期记录不全' : ''}${r.priced ? '' : ' · 还没取到报价，按成本估'}</div></div>
-      <div class="n ${cls(r.total)}">${signedCents(r.total)}<small class="flat">${[r.qty > 0 ? `浮动 ${signedCents(r.floating)}` : '', r.realized || !r.qty ? `已实现 ${signedCents(r.realized)}` : ''].filter(Boolean).join(' · ')}</small></div></button>`).join('')}</div>`;
+  return `<div class="sec card"><div class="kv"><div><span>${T`做过`}</span><b>${T`${rows.length} 只`}</b></div><div><span>${T`赚钱 / 亏钱`}</span><b><em class="up">${win}</em> / <em class="down">${lose}</em></b></div><div><span>${T`合计盈亏`}</span><b class="${cls(total)}">${signedCents(total)}</b></div></div>
+    <p class="small" style="margin-top:6px">${v.archived ? T`持有中的按重置时的价格算浮动盈亏，卖掉的部分算已实现盈亏，都扣过费用。点一只看它的每一笔买卖。` : T`持有中的按现价算浮动盈亏，卖掉的部分算已实现盈亏，都扣过费用。点一只看它的每一笔买卖。`}</p></div>
+    <div class="sec card">${rows.map(r => `<button class="row" data-records="${esc(plainCode(r.code))}"><div class="grow"><div class="t">${esc(r.name)} <span class="code">${esc(plainCode(r.code))}</span> <span class="badge ${r.qty > 0 ? 'good' : 'off'}">${r.qty > 0 ? T`持有 ${commas(r.qty)} 股` : T`已清仓`}</span></div>
+      <div class="d">${T`买 ${commas(r.bought)} 股 ${cents(r.boughtAmt, 0)} · 卖 ${commas(r.sold)} 股 ${cents(r.soldAmt, 0)} · 费 ${cents(r.fees)}`}${r.partial ? ' · ' + T`早期记录不全` : ''}${r.priced ? '' : ' · ' + T`还没取到报价，按成本估`}</div></div>
+      <div class="n ${cls(r.total)}">${signedCents(r.total)}<small class="flat">${[r.qty > 0 ? T`浮动 ${signedCents(r.floating)}` : '', r.realized || !r.qty ? T`已实现 ${signedCents(r.realized)}` : ''].filter(Boolean).join(' · ')}</small></div></button>`).join('')}</div>`;
 }
 
 /**
@@ -2604,13 +2612,13 @@ function dayPoints(v) {
 function daysPane(v) {
   const { book, market } = v;
   const points = dayPoints(v);
-  if (!points.length) return '<div class="sec card small">每个交易日收盘后记一次总资产，打开过星云的交易日都有记录。</div>';
+  if (!points.length) return `<div class="sec card small">${T`每个交易日收盘后记一次总资产，打开过星云的交易日都有记录。`}</div>`;
   const perDay = {};
   book.trades.forEach(t => { const d = Core.marketDay(market, t.at); perDay[d] = (perDay[d] || 0) + 1; });
   const rows = points.map((p, k) => ({ day: p[0], total: p[1], live: p[2], change: p[1] - (k ? points[k - 1][1] : book.capital), n: perDay[p[0]] || 0 })).reverse();
   return `<div class="sec card">${points.length >= 2 ? '<canvas class="chart" id="acctCurve" style="height:110px"></canvas>' : ''}
-    <p class="small">${points.length >= 2 ? `${esc(points[0][0])} 起，每个交易日收盘记一个点，灰线是本金。` : '至少两个交易日才有曲线。'}</p></div>
-    <div class="sec card">${rows.map(r => `<button class="row" data-day="${r.day}"><div class="grow"><div class="t">${dayTitle(r.day)}${r.live ? ' · 今天，按最新价' : ''}</div><div class="d">${r.n ? `成交 ${r.n} 笔，点开看明细` : '这天没有成交'}</div></div>
+    <p class="small">${points.length >= 2 ? T`${esc(points[0][0])} 起，每个交易日收盘记一个点，灰线是本金。` : T`至少两个交易日才有曲线。`}</p></div>
+    <div class="sec card">${rows.map(r => `<button class="row" data-day="${r.day}"><div class="grow"><div class="t">${dayTitle(r.day)}${r.live ? ' · ' + T`今天，按最新价` : ''}</div><div class="d">${r.n ? T`成交 ${r.n} 笔，点开看明细` : T`这天没有成交`}</div></div>
       <div class="n">${cents(r.total)}<small class="${cls(r.change)}">${signedCents(r.change)}</small></div></button>`).join('')}</div>`;
 }
 function drawAccountCurve(v) {
@@ -2627,20 +2635,20 @@ function archiveList(market) {
   const own = S.archive.map((a, k) => [a, k]).filter(([a]) => a.market === market);
   const row = ([a, k]) => {
     const pnl = a.final - a.capital;
-    return `<button class="row" data-archive="${k}"><div class="grow"><div class="t">${accountName(a.market, a)}</div><div class="d">${a.openedAt ? bjDay(a.openedAt) : '—'} 至 ${bjDay(a.closedAt)} · 本金 ${cents(a.capital, 0)} · ${commas(a.trades.length)} 笔成交</div></div>
+    return `<button class="row" data-archive="${k}"><div class="grow"><div class="t">${accountName(a.market, a)}</div><div class="d">${T`${a.openedAt ? bjDay(a.openedAt) : '—'} 至 ${bjDay(a.closedAt)} · 本金 ${cents(a.capital, 0)} · ${commas(a.trades.length)} 笔成交`}</div></div>
       <div class="n">${cents(a.final, 0)}<small class="${cls(pnl)}">${Core.signed(pnl / a.capital * 100)}%</small></div></button>`;
   };
-  return own.length ? `<div class="sec"><h4>以前的账户（重置前存下的，记录还能查）</h4><div class="card">${own.map(row).join('')}</div></div>` : '';
+  return own.length ? `<div class="sec"><h4>${T`以前的账户（重置前存下的，记录还能查）`}</h4><div class="card">${own.map(row).join('')}</div></div>` : '';
 }
 
 function rulesNote(st) {
-  return `<details class="sec rules" id="acctRules"${st.rulesOpen ? ' open' : ''}><summary>模拟成交按什么规则</summary><div class="card">
-    <div class="check"><i>·</i><span>A 股 T+1：今天买的下一交易日才能卖。一手 100 股（科创板最少 200 股）。</span></div>
-    <div class="check"><i>·</i><span>费用：佣金万 2.5（最低 5 元）、过户费十万分之一、印花税万分之五（只在卖的时候收）。港股：印花税 0.1%（双边）、交易费和征费合计 0.0085%、佣金万 3。</span></div>
-    <div class="check"><i>·</i><span>美股 T+0、最少 1 股、没有涨跌停。佣金约万 1（最低 1 美元）、卖的时候规费约十万分之三，按常见费率估算。行情没有盘口数据，按最新价估算成交，单笔不超过当天成交量的 1%。</span></div>
-    <div class="check"><i>·</i><span>A 股、港股按真实五档盘口逐档吃单，超过五档总量的部分不成交。</span></div>
-    <div class="check"><i>·</i><span>封涨停没有卖盘买不进，封跌停没有买盘卖不出，停牌不成交。</span></div>
-    <div class="check"><i>·</i><span>收盘后下单排队，下一交易时段按真实开盘价成交；一字涨跌停继续排队。</span></div>
+  return `<details class="sec rules" id="acctRules"${st.rulesOpen ? ' open' : ''}><summary>${T`模拟成交按什么规则`}</summary><div class="card">
+    <div class="check"><i>·</i><span>${T`A 股 T+1：今天买的下一交易日才能卖。一手 100 股（科创板最少 200 股）。`}</span></div>
+    <div class="check"><i>·</i><span>${T`费用：佣金万 2.5（最低 5 元）、过户费十万分之一、印花税万分之五（只在卖的时候收）。港股：印花税 0.1%（双边）、交易费和征费合计 0.0085%、佣金万 3。`}</span></div>
+    <div class="check"><i>·</i><span>${T`美股 T+0、最少 1 股、没有涨跌停。佣金约万 1（最低 1 美元）、卖的时候规费约十万分之三，按常见费率估算。行情没有盘口数据，按最新价估算成交，单笔不超过当天成交量的 1%。`}</span></div>
+    <div class="check"><i>·</i><span>${T`A 股、港股按真实五档盘口逐档吃单，超过五档总量的部分不成交。`}</span></div>
+    <div class="check"><i>·</i><span>${T`封涨停没有卖盘买不进，封跌停没有买盘卖不出，停牌不成交。`}</span></div>
+    <div class="check"><i>·</i><span>${T`收盘后下单排队，下一交易时段按真实开盘价成交；一字涨跌停继续排队。`}</span></div>
   </div></details>`;
 }
 
@@ -2678,7 +2686,7 @@ function bindAccount(st, body) {
     if (!b.dataset.capital) { rerender({ reset: false }); return; }
     const kept = resetBook(st.market, Number(b.dataset.capital));
     rerender({ reset: false, tab: 'hold' });
-    if (kept) feedText(`<span class="name">${esc(ACCOUNTS.find(a => a.market === st.market).label)}</span>已重置，旧账户的记录在「以前的账户」里`);
+    if (kept) feedText(T`<span class="name">${esc(ACCOUNTS.find(a => a.market === st.market).label)}</span>已重置，旧账户的记录在「以前的账户」里`);
   }; });
   bindResults(st, body);
 }
@@ -2715,36 +2723,36 @@ function renderTradeSheet() {
   const book = st.archive !== null && st.archive !== undefined ? S.archive[st.archive] : S.books[st.market];
   const t = book && book.trades.find(x => (st.no ? x.no === st.no : x.at === st.at));
   const body = $('sheetBody');
-  $('sheetTitle').textContent = t ? `${SIDE_WORD[t.side]} · ${t.name}` : '成交明细';
+  $('sheetTitle').textContent = t ? `${SIDE_WORD[t.side]} · ${t.name}` : T`成交明细`;
   $('sheetSub').textContent = t ? `${plainCode(t.code)} · ${ACCOUNTS.find(a => a.market === st.market).label} · ${accountName(st.market, book)}` : '';
-  if (!t) { body.innerHTML = '<div class="sec card small">这笔记录找不到了，账户可能已经重置。重置前的记录在「以前的账户」里。</div>'; return; }
+  if (!t) { body.innerHTML = `<div class="sec card small">${T`这笔记录找不到了，账户可能已经重置。重置前的记录在「以前的账户」里。`}</div>`; return; }
   const us = t.code.startsWith('us');
   const order = (book.orders || []).find(o => o.no === t.no && t.no);
-  const how = t.basis === 'open' ? '收盘后下的单排队，下一交易日按真实开盘价成交' : us ? '按当时的最新价估算（美股行情没有盘口）' : '按当时的真实五档盘口逐档成交';
+  const how = t.basis === 'open' ? T`收盘后下的单排队，下一交易日按真实开盘价成交` : us ? T`按当时的最新价估算（美股行情没有盘口）` : T`按当时的真实五档盘口逐档成交`;
   const ny = us ? Core.newYork(t.at) : null;
-  const nyText = ny ? `（美东 ${ny.day.slice(5)} ${String(Math.floor(ny.minute / 60)).padStart(2, '0')}:${String(ny.minute % 60).padStart(2, '0')}）` : '';
+  const nyText = ny ? T`（美东 ${ny.day.slice(5)} ${String(Math.floor(ny.minute / 60)).padStart(2, '0')}:${String(ny.minute % 60).padStart(2, '0')}）` : '';
   const fee = t.fee || { commission: 0, stamp: 0, transfer: 0, levy: 0, total: 0 };
   const known = t.realized !== null && t.realized !== undefined;
   const i = S.codeIndex.get(t.code);
   body.innerHTML = `<div class="sec card"><div class="kv">
-      <div><span>方向</span><b class="${t.side === 'buy' ? 'up' : 'down'}">${SIDE_WORD[t.side]}</b></div><div><span>成交数量</span><b>${commas(t.qty)} 股</b></div><div><span>成交均价</span><b>${Core.fixed(t.price, 3)}</b></div>
-      <div><span>成交金额</span><b>${cents(t.amount)}</b></div><div><span>费用合计</span><b>${cents(fee.total)}</b></div><div><span>${t.side === 'buy' ? '实际付出' : '实际收到'}</span><b>${cents(t.side === 'buy' ? t.amount + fee.total : t.amount - fee.total)}</b></div>
-    </div><p class="small" style="margin-top:6px">金额单位：${MONEY_WORD[st.market]}</p></div>
+      <div><span>${T`方向`}</span><b class="${t.side === 'buy' ? 'up' : 'down'}">${SIDE_WORD[t.side]}</b></div><div><span>${T`成交数量`}</span><b>${T`${commas(t.qty)} 股`}</b></div><div><span>${T`成交均价`}</span><b>${Core.fixed(t.price, 3)}</b></div>
+      <div><span>${T`成交金额`}</span><b>${cents(t.amount)}</b></div><div><span>${T`费用合计`}</span><b>${cents(fee.total)}</b></div><div><span>${t.side === 'buy' ? T`实际付出` : T`实际收到`}</span><b>${cents(t.side === 'buy' ? t.amount + fee.total : t.amount - fee.total)}</b></div>
+    </div><p class="small" style="margin-top:6px">${T`金额单位：${MONEY_WORD[st.market]}`}</p></div>
     <div class="sec card lines">
-      <div><span>成交时间</span><b>${t.basis === 'open'
-        ? `${Core.marketDay(st.market, t.at)} 开盘价（北京时间 ${Core.clock(t.at)} 记账）`
-        : `北京时间 ${bjDay(t.at)} ${Core.clock(t.at)}${nyText}`}</b></div>
-      <div><span>成交方式</span><b>${how}</b></div>
-      <div><span>佣金</span><b>${cents(fee.commission)}</b></div>
-      <div><span>印花税</span><b>${cents(fee.stamp)}</b></div>
-      <div><span>过户费</span><b>${cents(fee.transfer)}</b></div>
-      <div><span>交易费和征费</span><b>${cents(fee.levy)}</b></div>
-      ${t.side === 'sell' ? `<div><span>这笔模拟卖出的盈亏</span><b class="${known ? cls(t.realized) : ''}">${known ? signedCents(t.realized) + '（扣过买卖两边的费用）' : '早期记录不全，算不出'}</b></div>` : ''}
-      ${t.cashAfter !== undefined ? `<div><span>成交后现金</span><b>${cents(t.cashAfter)}</b></div>` : ''}
-      ${order ? `<div><span>委托</span><b>第 ${order.no} 号 · ${order.via === 'queue' ? '排队委托' : '即时委托'} · 委托 ${commas(order.qty)} 股${order.reason ? '，' + esc(order.reason) : ''}</b></div>` : ''}
+      <div><span>${T`成交时间`}</span><b>${t.basis === 'open'
+        ? T`${Core.marketDay(st.market, t.at)} 开盘价（北京时间 ${Core.clock(t.at)} 记账）`
+        : T`北京时间 ${bjDay(t.at)} ${Core.clock(t.at)}${nyText}`}</b></div>
+      <div><span>${T`成交方式`}</span><b>${how}</b></div>
+      <div><span>${T`佣金`}</span><b>${cents(fee.commission)}</b></div>
+      <div><span>${T`印花税`}</span><b>${cents(fee.stamp)}</b></div>
+      <div><span>${T`过户费`}</span><b>${cents(fee.transfer)}</b></div>
+      <div><span>${T`交易费和征费`}</span><b>${cents(fee.levy)}</b></div>
+      ${t.side === 'sell' ? `<div><span>${T`这笔模拟卖出的盈亏`}</span><b class="${known ? cls(t.realized) : ''}">${known ? T`${signedCents(t.realized)}（扣过买卖两边的费用）` : T`早期记录不全，算不出`}</b></div>` : ''}
+      ${t.cashAfter !== undefined ? `<div><span>${T`成交后现金`}</span><b>${cents(t.cashAfter)}</b></div>` : ''}
+      ${order ? `<div><span>${T`委托`}</span><b>${order.via === 'queue' ? T`第 ${order.no} 号 · 排队委托 · 委托 ${commas(order.qty)} 股` : T`第 ${order.no} 号 · 即时委托 · 委托 ${commas(order.qty)} 股`}${order.reason ? T`，` + esc(trMsg(order.reason)) : ''}</b></div>` : ''}
     </div>
-    <div class="actions">${i !== undefined ? '<button class="alt" id="tradeStock">看这只股票</button>' : ''}<button class="alt" id="tradeAll">这只的全部买卖</button></div>
-    <p class="small" style="margin-top:12px">模拟成交，不连券商，不涉及真实资金。${NOTE}</p>`;
+    <div class="actions">${i !== undefined ? `<button class="alt" id="tradeStock">${T`看这只股票`}</button>` : ''}<button class="alt" id="tradeAll">${T`这只的全部买卖`}</button></div>
+    <p class="small" style="margin-top:12px">${T`模拟成交，不连券商，不涉及真实资金。${NOTE}`}</p>`;
   const stock = $('tradeStock');
   if (stock) stock.onclick = () => openStock(i);
   $('tradeAll').onclick = () => {
@@ -2818,4 +2826,4 @@ function tap(x, y) {
 window.addEventListener('resize', () => { layout(); });
 renderIndices();
 renderMarket();
-boot().catch(err => { console.error(err); $('modeText').textContent = '暂时用不了，请稍后再试'; });
+boot().catch(err => { console.error(err); $('modeText').textContent = T`暂时用不了，请稍后再试`; });

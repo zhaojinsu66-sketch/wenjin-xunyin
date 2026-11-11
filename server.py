@@ -145,6 +145,7 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 if __name__ == "__main__":
     if not (DATA / "universe.json").is_file():
-        sys.exit("缺少 data/universe.json：先运行 python tools/update_universe.py")
-    print("问金寻银：http://127.0.0.1:%d/  （Ctrl+C 停止）" % PORT, flush=True)
+        sys.exit("缺少 data/universe.json：先运行 python tools/update_universe.py\n"
+                 "data/universe.json is missing: run python tools/update_universe.py first")
+    print("问金寻银 / Wenjin Xunyin: http://127.0.0.1:%d/  （Ctrl+C 停止 / to stop）" % PORT, flush=True)
     Server(("127.0.0.1", PORT), Handler).serve_forever()

@@ -33,6 +33,7 @@ h3, h4, p { margin: 0; font-weight: 500; }
 .ghost { width: 30px; height: 30px; flex: none; border-radius: 9px; font-size: 20px; line-height: 1; color: var(--ink); opacity: .86; display: grid; place-items: center; }
 .ghost:active { background: rgba(255, 255, 255, .08); }
 .ghost.small { width: 24px; height: 22px; font-size: 10px; }
+.ghost.lang { width: auto; min-width: 30px; height: 24px; padding: 0 7px; font: 600 11px/1 var(--mono); letter-spacing: .04em; border: 1px solid var(--line-strong); }
 .basket { position: relative; }
 .basket[hidden] { display: none; }
 .basket b { position: absolute; right: -3px; top: -2px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--gold); color: #18120a; font: 700 9.5px/15px var(--mono); }
@@ -59,6 +60,7 @@ h3, h4, p { margin: 0; font-weight: 500; }
 .acct:active { background: rgba(255, 255, 255, .05); }
 .acct label { display: block; color: var(--muted); font-size: 10.5px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .acct label::after { content: ' · 查记录 ›'; color: var(--gold); }
+html[lang="en"] .acct label::after { content: ' · View records ›'; }
 .big { font: 600 25px/30px var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: #FFE3A8; text-shadow: 0 0 14px rgba(255, 170, 70, .55), 0 0 2px rgba(255, 220, 160, .7); white-space: nowrap; }
 .big.neg { color: #B8FFE0; text-shadow: 0 0 14px rgba(43, 214, 138, .55); }
 .sub { color: var(--muted); font-size: 10.5px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -97,6 +99,19 @@ h3, h4, p { margin: 0; font-weight: 500; }
 .note { margin: 3px 2px 0; color: var(--faint); font-size: 9.5px; line-height: 12px; text-align: center; }
 
 @media (max-height: 740px) { .panel { height: 72px; } .indices em { display: inline; margin-left: 3px; } .big { font-size: 22px; line-height: 26px; } }
+
+/* 换语言的入口：宽屏在顶栏右边，窄屏顶栏放不下，改放在底部说明文字后面 / Language switch: in the top bar on wide screens; on narrow screens the top bar has no room, so it sits after the note at the bottom */
+.lang-link { display: none; pointer-events: auto; color: var(--gold); font-size: 9.5px; line-height: 12px; text-decoration: underline; }
+@media (max-width: 899px) { .ghost.lang { display: none; } .lang-link { display: inline; } }
+
+/* 英文比中文长：窄屏上收紧顶部的品牌和状态条、小面板的标题 / English runs longer than Chinese: tighten the brand, status pill and panel titles on narrow screens */
+html[lang="en"] .brand b { letter-spacing: .08em; white-space: nowrap; }
+@media (max-width: 899px) {
+  html[lang="en"] .brand span { display: none; }
+  html[lang="en"] .mode { min-width: 0; }
+  html[lang="en"] .mode span { overflow: hidden; text-overflow: ellipsis; }
+  html[lang="en"] .panel h4 { font-size: 9px; letter-spacing: -.01em; }
+}
 .side { display: none; grid-area: side; }
 @media (min-width: 900px) {
   /* 宽屏：底部一直是数据栏（和窄屏一样），左边指数和账户，右边放窄屏上没地方放的榜单 / Wide screens: the data bar stays at the bottom (as on narrow screens), indices and account on the left, and the right column holds lists that do not fit on narrow screens */
@@ -122,6 +137,7 @@ h3, h4, p { margin: 0; font-weight: 500; }
 .mover b, .ind-row b, .rule-row b { flex: none; font: 500 11px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .ind-row { cursor: default; }
 .ind-row .nm { flex: none; width: 74px; }
+html[lang="en"] .ind-row .nm { width: 128px; }
 .ind-bar { flex: 1; min-width: 0; height: 6px; position: relative; background: rgba(255, 255, 255, .05); border-radius: 2px; }
 .ind-bar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 .ind-bar::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(255, 255, 255, .2); }
